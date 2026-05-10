@@ -4,6 +4,7 @@ Thumbs.db
 # Editor state
 .idea/
 .vscode/
+.serena/
 *.swp
 *.swo
 .worktrees/
