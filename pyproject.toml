@@ -6,6 +6,8 @@ dependencies = []
 
 [dependency-groups]
 dev = [
+  "httpx>=0.28.0",
+  "omnibridge-api",
   "pytest>=8.0.0",
   "ruff>=0.8.0",
 ]
@@ -20,6 +22,10 @@ members = [
   "packages/agent-tools",
   "corridors/vmware-to-azure",
 ]
+
+[tool.uv.sources]
+omnibridge-api = { workspace = true }
+omnibridge-canonical-graph = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = [
