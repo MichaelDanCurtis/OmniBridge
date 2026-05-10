@@ -7,6 +7,11 @@ ASSUMPTIONS = [
 ]
 
 
+def _require_non_negative(metric_name: str, value: int) -> None:
+    if value < 0:
+        raise ValueError(f"{metric_name} must be non-negative")
+
+
 def estimate_vmware_to_azure(
     compute_nodes: int,
     storage_gb: int,
@@ -14,6 +19,12 @@ def estimate_vmware_to_azure(
     blocker_count: int,
     warning_count: int,
 ) -> CommercialEstimate:
+    _require_non_negative("compute_nodes", compute_nodes)
+    _require_non_negative("storage_gb", storage_gb)
+    _require_non_negative("network_segments", network_segments)
+    _require_non_negative("blocker_count", blocker_count)
+    _require_non_negative("warning_count", warning_count)
+
     complexity_score = (
         compute_nodes * 4
         + network_segments * 5
