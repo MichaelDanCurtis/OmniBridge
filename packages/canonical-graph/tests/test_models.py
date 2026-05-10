@@ -61,6 +61,46 @@ def test_graph_node_rejects_empty_labels() -> None:
         )
 
 
+@pytest.mark.parametrize("label", ["", "Bad Label"])
+def test_graph_node_rejects_unsafe_label_items(label: str) -> None:
+    with pytest.raises(ValidationError):
+        GraphNode(
+            id="node-1",
+            project_id="project-1",
+            tenant_id="tenant-1",
+            labels=[label],
+        )
+
+
+@pytest.mark.parametrize(
+    "relationship_type",
+    ["", "DEPENDS_ON) DELETE n //"],
+)
+def test_graph_edge_rejects_unsafe_relationship_types(
+    relationship_type: str,
+) -> None:
+    with pytest.raises(ValidationError):
+        GraphEdge(
+            id="edge-1",
+            project_id="project-1",
+            tenant_id="tenant-1",
+            source_id="node-api",
+            target_id="node-db",
+            relationship_type=relationship_type,
+        )
+
+
+def test_graph_properties_reject_nested_dict_values() -> None:
+    with pytest.raises(ValidationError):
+        GraphNode(
+            id="node-1",
+            project_id="project-1",
+            tenant_id="tenant-1",
+            labels=["ComputeNode"],
+            properties={"metadata": {"nested": "value"}},
+        )
+
+
 def test_mutable_defaults_are_independent_between_instances() -> None:
     first_node = GraphNode(
         id="node-1",
