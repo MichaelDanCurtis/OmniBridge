@@ -14,7 +14,19 @@ def test_blueprint_endpoint_returns_vmware_to_azure_blueprint() -> None:
     client = TestClient(app)
     response = client.get("/blueprints/release1-demo")
     assert response.status_code == 200
-    assert response.json()["corridor"] == "vmware-to-azure"
+    blueprint = response.json()
+    assert blueprint["corridor"] == "vmware-to-azure"
+    assert blueprint["compute_node_names"] == [
+        "claims-web-01",
+        "claims-api-01",
+        "claims-db-01",
+    ]
+    assert blueprint["waves"][0]["compute_nodes"] == [
+        "claims-web-01",
+        "claims-api-01",
+        "claims-db-01",
+    ]
+    assert "source_shutdown_approval" in blueprint["approval_gates"]
 
 
 def test_analysis_endpoint_returns_decision_points() -> None:
