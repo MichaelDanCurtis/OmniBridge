@@ -2,8 +2,6 @@
   "name": "omnibridge",
   "private": true,
   "scripts": {
-    "test": "pnpm -r test",
-    "dev:web": "pnpm -C apps/web dev",
-    "build:web": "pnpm -C apps/web build"
+    "test": "pnpm -r test"
   }
 }
