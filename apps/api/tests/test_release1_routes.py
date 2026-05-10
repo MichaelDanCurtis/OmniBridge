@@ -110,6 +110,7 @@ def test_artifact_endpoints_return_blueprint_and_runbook() -> None:
 
     blueprint = client.get("/artifacts/release1-blueprint.yaml")
     runbook = client.get("/artifacts/release1-runbook.md")
+    terraform = client.get("/artifacts/release1-main.tf")
 
     assert blueprint.status_code == 200
     assert blueprint.headers["content-type"].startswith("application/yaml")
@@ -119,6 +120,10 @@ def test_artifact_endpoints_return_blueprint_and_runbook() -> None:
     assert runbook.headers["content-type"].startswith("text/markdown")
     assert "# Claims Portal Migration Runbook" in runbook.text
     assert "claims-db-01" in runbook.text
+    assert terraform.status_code == 200
+    assert terraform.headers["content-type"].startswith("text/plain")
+    assert "# OmniBridge generated Terraform draft for Claims Portal" in terraform.text
+    assert 'resource "azurerm_linux_virtual_machine" "vm"' in terraform.text
 
 
 def test_approval_routes_return_and_update_release1_ledger() -> None:
@@ -143,6 +148,47 @@ def test_approval_routes_return_and_update_release1_ledger() -> None:
     assert approve_response.json()["status"] == "approved"
 
 
+def test_execution_plan_endpoint_returns_azure_migrate_dry_run_plan() -> None:
+    client = TestClient(app)
+
+    response = client.get("/execution-plans/release1-demo")
+
+    assert response.status_code == 200
+    plan = response.json()
+    assert plan["backend"] == "azure-migrate"
+    assert plan["execution_mode"] == "dry_run"
+    assert plan["wave_id"] == "wave-001"
+    assert [operation["name"] for operation in plan["operations"]] == [
+        "ensure_migrate_project",
+        "register_vmware_machine",
+        "register_vmware_machine",
+        "register_vmware_machine",
+        "start_assessment",
+        "start_test_migration",
+        "await_cutover_approval",
+    ]
+    assert plan["operations"][5]["approval_gate"] == "test_migration_approval"
+
+
+def test_validation_endpoint_returns_release1_validation_evidence() -> None:
+    client = TestClient(app)
+
+    response = client.get("/validation/release1-demo")
+
+    assert response.status_code == 200
+    evidence = response.json()
+    assert evidence["wave_id"] == "wave-001"
+    assert evidence["summary"] == {
+        "total_checks": 18,
+        "pending": 12,
+        "passed": 0,
+        "failed": 0,
+        "blocked": 6,
+    }
+    assert evidence["checks"][0]["check_id"] == "vm_boot"
+    assert evidence["checks"][-1]["target_name"] == "claims-db-01"
+
+
 def test_workspace_endpoint_returns_consultant_workspace_sections() -> None:
     client = TestClient(app)
     response = client.get("/workspace/release1-demo")
@@ -164,6 +210,11 @@ def test_workspace_endpoint_returns_consultant_workspace_sections() -> None:
     }
     assert workspace["workflow"]["state"] == "BLUEPRINT_GENERATED"
     assert workspace["workflow"]["pending_approval_count"] == 6
+    assert workspace["execution_plan"]["backend"] == "azure-migrate"
+    assert workspace["execution_plan"]["operations"][0]["name"] == "ensure_migrate_project"
+    assert workspace["execution_plan"]["operations"][5]["approval_gate"] == "test_migration_approval"
+    assert workspace["validation_evidence"]["summary"]["blocked"] == 6
+    assert workspace["validation_evidence"]["checks"][0]["status"] == "pending"
     assert workspace["topology"]["node_counts"]["ComputeNode"] == 3
     assert workspace["topology"]["node_counts"]["Host"] == 1
     assert workspace["topology"]["relationship_counts"]["RUNS_ON"] == 3
@@ -187,4 +238,9 @@ def test_workspace_endpoint_returns_consultant_workspace_sections() -> None:
         "label": "Migration blueprint",
         "href": "/artifacts/release1-blueprint.yaml",
         "kind": "yaml",
+    }
+    assert workspace["artifacts"][3] == {
+        "label": "Terraform draft",
+        "href": "/artifacts/release1-main.tf",
+        "kind": "terraform",
     }

@@ -6,10 +6,17 @@ from typing import Any
 from omnibridge_agent_tools.models import AnalysisResult
 from omnibridge_agent_tools.analysis_workflow import run_fixture_analysis
 from omnibridge_api.settings import settings
+from omnibridge_azure_migrate_adapter import (
+    AzureMigrateMachineRef,
+    AzureMigrateOperationPlan,
+    AzureMigrateOperationPlanner,
+    AzureMigrateProjectRef,
+)
 from omnibridge_blueprint_engine.artifacts import (
     render_assessment_markdown,
     render_blueprint_yaml,
     render_runbook_markdown,
+    render_terraform_main_tf,
 )
 from omnibridge_blueprint_engine.generator import generate_vmware_to_azure_blueprint
 from omnibridge_blueprint_engine.models import MigrationBlueprint
@@ -18,6 +25,8 @@ from omnibridge_estimator.models import CommercialEstimate
 from omnibridge_estimator.vmware_to_azure import estimate_vmware_to_azure
 from omnibridge_rules_engine.models import ReadinessFinding
 from omnibridge_rules_engine.vmware_readiness import evaluate_vmware_vm
+from omnibridge_validation_engine.models import ValidationEvidence
+from omnibridge_validation_engine.vmware_to_azure import build_release1_validation_evidence
 from omnibridge_vmware_to_azure.fixture_loader import load_fixture
 from omnibridge_vmware_to_azure.mapper import MappedGraph, map_fixture_to_graph
 from omnibridge_workflow_engine.models import (
@@ -43,9 +52,12 @@ class Release1Demo:
     estimate: CommercialEstimate
     blueprint: MigrationBlueprint
     analysis: AnalysisResult
+    execution_plan: AzureMigrateOperationPlan
+    validation_evidence: ValidationEvidence
     assessment_markdown: str
     blueprint_yaml: str
     runbook_markdown: str
+    terraform_main_tf: str
     workspace: dict[str, Any]
 
 
@@ -155,6 +167,42 @@ def _disk_type(vm: dict[str, Any], target_subnet: str) -> str:
     return "Standard SSD"
 
 
+def _target_subnet_id(target_subnet: str) -> str:
+    return (
+        "/subscriptions/sub-acme-prod/resourceGroups/rg-network/providers/"
+        f"Microsoft.Network/virtualNetworks/vnet-prod/subnets/{target_subnet}"
+    )
+
+
+def _build_execution_plan(fixture: dict[str, Any]) -> AzureMigrateOperationPlan:
+    networks_by_moid = {network["moid"]: network for network in fixture["networks"]}
+    machines = []
+
+    for vm in fixture["vms"]:
+        primary_nic = vm["nics"][0]
+        source_network = networks_by_moid[primary_nic["network_moid"]]
+        target_subnet = _target_subnet(str(source_network["name"]))
+        machines.append(
+            AzureMigrateMachineRef(
+                vm_moid=str(vm["moid"]),
+                vm_name=str(vm["name"]),
+                target_vm_size=_vm_size(vm),
+                target_subnet_id=_target_subnet_id(target_subnet),
+            )
+        )
+
+    return AzureMigrateOperationPlanner().plan_agentless_vmware_wave(
+        project=AzureMigrateProjectRef(
+            subscription_id="sub-acme-prod",
+            resource_group="rg-migrate-prod",
+            project_name="omni-acme-release1",
+            region="westus2",
+        ),
+        wave_id="wave-001",
+        source_machines=tuple(machines),
+    )
+
+
 def _readiness_status(vm_id: str, findings: list[ReadinessFinding]) -> str:
     vm_findings = [finding for finding in findings if finding.target_node_id == vm_id]
     if any(finding.severity == "blocker" for finding in vm_findings):
@@ -172,6 +220,8 @@ def _build_workspace(
     estimate: CommercialEstimate,
     blueprint: MigrationBlueprint,
     analysis: AnalysisResult,
+    execution_plan: AzureMigrateOperationPlan,
+    validation_evidence: ValidationEvidence,
 ) -> dict[str, Any]:
     networks_by_moid = {network["moid"]: network for network in fixture["networks"]}
     node_names = {
@@ -263,6 +313,8 @@ def _build_workspace(
             state=WorkflowState.BLUEPRINT_GENERATED,
             approvals=ApprovalLedger.seed_release1().records,
         ).model_dump(mode="json"),
+        "execution_plan": execution_plan.model_dump(mode="json"),
+        "validation_evidence": validation_evidence.model_dump(mode="json"),
         "topology": _build_topology(graph),
         "network_mappings": network_mappings,
         "readiness": {
@@ -309,6 +361,11 @@ def _build_workspace(
                 "href": "/artifacts/release1-runbook.md",
                 "kind": "markdown",
             },
+            {
+                "label": "Terraform draft",
+                "href": "/artifacts/release1-main.tf",
+                "kind": "terraform",
+            },
         ],
     }
 
@@ -342,6 +399,22 @@ def build_release1_demo(
         blocker_count=blocker_count,
         warning_count=warning_count,
     )
+    execution_plan = _build_execution_plan(fixture)
+    names_by_node_id = {
+        f"vm:{vm['moid']}": str(vm["name"])
+        for vm in fixture["vms"]
+    }
+    blocked_compute_nodes = tuple(
+        names_by_node_id[finding.target_node_id]
+        for finding in findings
+        if finding.severity == "blocker" and finding.target_node_id in names_by_node_id
+    )
+    validation_evidence = build_release1_validation_evidence(
+        project_id=str(fixture["project_id"]),
+        wave_id="wave-001",
+        compute_node_names=tuple(compute_node_names),
+        blocked_compute_nodes=blocked_compute_nodes,
+    )
 
     return Release1Demo(
         graph=graph,
@@ -355,6 +428,8 @@ def build_release1_demo(
         estimate=estimate,
         blueprint=blueprint,
         analysis=analysis,
+        execution_plan=execution_plan,
+        validation_evidence=validation_evidence,
         assessment_markdown=render_assessment_markdown(
             project_name=PROJECT_NAME,
             application_name=APPLICATION_NAME,
@@ -366,6 +441,12 @@ def build_release1_demo(
             project_name=PROJECT_NAME,
             blueprint=blueprint,
             blocker_count=blocker_count,
+        ),
+        terraform_main_tf=render_terraform_main_tf(
+            blueprint=blueprint,
+            location="westus2",
+            resource_group_name="rg-claims-prod",
+            subnet_id=_target_subnet_id("snet-app"),
         ),
         workspace=_build_workspace(
             fixture=fixture,
@@ -380,5 +461,7 @@ def build_release1_demo(
             estimate=estimate,
             blueprint=blueprint,
             analysis=analysis,
+            execution_plan=execution_plan,
+            validation_evidence=validation_evidence,
         ),
     )

@@ -138,6 +138,44 @@ export type ProjectWorkflow = {
   pending_approval_count: number;
 };
 
+export type ExecutionOperation = {
+  name: string;
+  execution_mode: string;
+  approval_required: boolean;
+  approval_gate: string | null;
+  payload: Record<string, unknown>;
+};
+
+export type ExecutionPlan = {
+  backend: string;
+  execution_mode: string;
+  wave_id: string;
+  operations: ExecutionOperation[];
+};
+
+export type ValidationSummary = {
+  total_checks: number;
+  pending: number;
+  passed: number;
+  failed: number;
+  blocked: number;
+};
+
+export type ValidationCheck = {
+  check_id: string;
+  target_name: string;
+  status: string;
+  evidence: string;
+  remediation: string | null;
+};
+
+export type ValidationEvidence = {
+  project_id: string;
+  wave_id: string;
+  summary: ValidationSummary;
+  checks: ValidationCheck[];
+};
+
 export type ReadinessFinding = {
   rule_id: string;
   severity: string;
@@ -160,6 +198,8 @@ export type WorkspaceData = {
   };
   graph_ingest: GraphIngestStatus;
   workflow: ProjectWorkflow;
+  execution_plan: ExecutionPlan;
+  validation_evidence: ValidationEvidence;
   topology: TopologySummary;
   network_mappings: NetworkMapping[];
   readiness: {
@@ -215,4 +255,23 @@ export async function persistFixtureGraph(): Promise<GraphImportResponse> {
   }
 
   return response.json() as Promise<GraphImportResponse>;
+}
+
+export async function approveGate(gate: string): Promise<ApprovalRecord> {
+  const response = await fetch(`/approvals/release1-demo/${gate}/approve`, {
+    body: JSON.stringify({
+      actor: "consultant@example.com",
+      reason: "Approved from Consultant Workspace.",
+    }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Approval failed for ${gate}: ${response.status}`);
+  }
+
+  return response.json() as Promise<ApprovalRecord>;
 }

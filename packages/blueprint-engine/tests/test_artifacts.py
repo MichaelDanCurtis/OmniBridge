@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from omnibridge_blueprint_engine.artifacts import (
     render_assessment_markdown,
     render_blueprint_yaml,
+    render_terraform_main_tf,
     render_runbook_markdown,
 )
 from omnibridge_blueprint_engine.generator import generate_vmware_to_azure_blueprint
@@ -101,3 +102,27 @@ def test_render_runbook_markdown_contains_cutover_and_validation_steps() -> None
     assert "claims-db-01" in markdown
     assert "## Cutover" in markdown
     assert "## Validation" in markdown
+
+
+def test_render_terraform_main_tf_contains_release1_vm_draft() -> None:
+    blueprint = generate_vmware_to_azure_blueprint(
+        project_id="project-acme-vmware-azure",
+        application_name="Claims Portal",
+        compute_node_names=["claims-web-01", "claims-api-01", "claims-db-01"],
+    )
+
+    terraform = render_terraform_main_tf(
+        blueprint=blueprint,
+        location="westus2",
+        resource_group_name="rg-claims-prod",
+        subnet_id="/subscriptions/sub-acme-prod/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-prod/subnets/snet-app",
+    )
+
+    assert '# OmniBridge generated Terraform draft for Claims Portal' in terraform
+    assert 'required_providers' in terraform
+    assert 'resource "azurerm_resource_group" "migration"' in terraform
+    assert 'resource "azurerm_network_interface" "vm_nic"' in terraform
+    assert 'resource "azurerm_linux_virtual_machine" "vm"' in terraform
+    assert '"claims-db-01"' in terraform
+    assert '"source_shutdown_approval"' in terraform
+    assert '"decommission_approval"' in terraform

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  approveGate,
   loadWorkspaceData,
   persistFixtureGraph,
   type GraphIngestStatus,
+  type ProjectWorkflow,
   type WorkspaceData,
 } from "./api";
 
@@ -101,8 +103,11 @@ function WorkspaceError() {
 
 function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
   const [graphIngest, setGraphIngest] = useState<GraphIngestStatus>(data.graph_ingest);
+  const [workflow, setWorkflow] = useState<ProjectWorkflow>(data.workflow);
   const [graphPersistError, setGraphPersistError] = useState<string | null>(null);
   const [isPersistingGraph, setIsPersistingGraph] = useState(false);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [approvingGate, setApprovingGate] = useState<string | null>(null);
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       {
@@ -157,6 +162,7 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
     [data.topology.relationship_counts],
   );
   const topologyEdges = data.topology.edges.slice(0, 8);
+  const validationChecks = data.validation_evidence.checks.slice(0, 8);
   const graphStatusLabel = graphIngest.persisted
     ? "Persisted to Neo4j"
     : graphIngest.neo4j_configured
@@ -178,6 +184,27 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
       setGraphPersistError("Graph persistence failed");
     } finally {
       setIsPersistingGraph(false);
+    }
+  }
+
+  async function handleApproveGate(gate: string) {
+    setApprovingGate(gate);
+    setApprovalError(null);
+    try {
+      const approved = await approveGate(gate);
+      const approvals = workflow.approvals.map((approval) =>
+        approval.gate === gate ? approved : approval,
+      );
+      setWorkflow({
+        ...workflow,
+        approvals,
+        pending_approval_count: approvals.filter((approval) => approval.status === "pending")
+          .length,
+      });
+    } catch {
+      setApprovalError(`Approval failed for ${gate}`);
+    } finally {
+      setApprovingGate(null);
     }
   }
 
@@ -232,6 +259,46 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
         <article className="work-panel">
           <div className="panel-heading">
             <div>
+              <p className="eyebrow">Test migration</p>
+              <h2>Validation evidence</h2>
+            </div>
+            <span className="count-badge">
+              {data.validation_evidence.summary.total_checks} checks
+            </span>
+          </div>
+          <div className="metric-grid">
+            <div>
+              <span>Pending</span>
+              <strong>{data.validation_evidence.summary.pending}</strong>
+            </div>
+            <div>
+              <span>Blocked</span>
+              <strong>{data.validation_evidence.summary.blocked}</strong>
+            </div>
+            <div>
+              <span>Passed</span>
+              <strong>{data.validation_evidence.summary.passed}</strong>
+            </div>
+          </div>
+          <ul className="validation-list">
+            {validationChecks.map((check) => (
+              <li key={`${check.target_name}-${check.check_id}`}>
+                <div>
+                  <strong>{check.check_id}</strong>
+                  <span>{check.target_name}</span>
+                </div>
+                <p>{check.remediation ?? check.evidence}</p>
+                <span className={`validation-status validation-status--${check.status}`}>
+                  {check.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </article>
+
+        <article className="work-panel">
+          <div className="panel-heading">
+            <div>
               <p className="eyebrow">Execution readiness</p>
               <h2>Blueprint approval</h2>
             </div>
@@ -260,22 +327,37 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
                 <p className="eyebrow">Workflow state</p>
                 <h2>Approval ledger</h2>
               </div>
-              <span className="count-badge">{data.workflow.pending_approval_count} pending</span>
+              <span className="count-badge">{workflow.pending_approval_count} pending</span>
             </div>
             <div className="metric-grid">
               <div>
                 <span>Current state</span>
-                <strong>{data.workflow.state}</strong>
+                <strong>{workflow.state}</strong>
               </div>
             </div>
             <ul className="approval-list">
-              {data.workflow.approvals.map((approval) => (
+              {workflow.approvals.map((approval) => (
                 <li key={approval.gate}>
                   <span>{approval.gate}</span>
-                  <strong>{approval.status}</strong>
+                  <div className="approval-actions">
+                    <strong>{approval.status}</strong>
+                    {approval.status === "pending" ? (
+                      <button
+                        className="inline-action"
+                        disabled={approvingGate === approval.gate}
+                        onClick={() => void handleApproveGate(approval.gate)}
+                        type="button"
+                      >
+                        {approvingGate === approval.gate
+                          ? "Approving..."
+                          : `Approve ${approval.gate}`}
+                      </button>
+                    ) : null}
+                  </div>
                 </li>
               ))}
             </ul>
+            {approvalError ? <p className="error-message">{approvalError}</p> : null}
           </div>
           <div className="artifact-section">
             <p className="eyebrow">Generated artifacts</p>
@@ -354,6 +436,45 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
           <ul className="assumption-list">
             {data.estimate.assumptions.map((assumption) => (
               <li key={assumption}>{assumption}</li>
+            ))}
+          </ul>
+        </article>
+      </section>
+
+      <section className="workspace-grid workspace-grid--balanced" aria-label="Execution mapping">
+        <article className="work-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Backend adapter</p>
+              <h2>Azure Migrate execution plan</h2>
+            </div>
+            <span className="status-pill">{data.execution_plan.execution_mode}</span>
+          </div>
+          <div className="metric-grid">
+            <div>
+              <span>Backend</span>
+              <strong>{data.execution_plan.backend}</strong>
+            </div>
+            <div>
+              <span>Wave</span>
+              <strong>{data.execution_plan.wave_id}</strong>
+            </div>
+            <div>
+              <span>Operations</span>
+              <strong>{data.execution_plan.operations.length}</strong>
+            </div>
+          </div>
+          <ul className="operation-list">
+            {data.execution_plan.operations.map((operation, index) => (
+              <li key={`${operation.name}-${index}`}>
+                <div>
+                  <strong>{operation.name}</strong>
+                  <span>{operation.execution_mode}</span>
+                </div>
+                {operation.approval_gate ? (
+                  <span className="status-pill">{operation.approval_gate}</span>
+                ) : null}
+              </li>
             ))}
           </ul>
         </article>

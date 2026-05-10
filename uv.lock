@@ -12,6 +12,7 @@ members = [
     "omnibridge-canonical-graph",
     "omnibridge-estimator",
     "omnibridge-rules-engine",
+    "omnibridge-validation-engine",
     "omnibridge-vmware-to-azure",
     "omnibridge-workflow-engine",
 ]
@@ -458,6 +459,7 @@ dev = [
     { name = "omnibridge-canonical-graph" },
     { name = "omnibridge-estimator" },
     { name = "omnibridge-rules-engine" },
+    { name = "omnibridge-validation-engine" },
     { name = "omnibridge-vmware-to-azure" },
     { name = "omnibridge-workflow-engine" },
     { name = "pytest" },
@@ -476,6 +478,7 @@ dev = [
     { name = "omnibridge-canonical-graph", editable = "packages/canonical-graph" },
     { name = "omnibridge-estimator", editable = "packages/estimator" },
     { name = "omnibridge-rules-engine", editable = "packages/rules-engine" },
+    { name = "omnibridge-validation-engine", editable = "packages/validation-engine" },
     { name = "omnibridge-vmware-to-azure", editable = "corridors/vmware-to-azure" },
     { name = "omnibridge-workflow-engine", editable = "packages/workflow-engine" },
     { name = "pytest", specifier = ">=8.0.0" },
@@ -509,10 +512,12 @@ dependencies = [
     { name = "fastapi" },
     { name = "neo4j" },
     { name = "omnibridge-agent-tools" },
+    { name = "omnibridge-azure-migrate-adapter" },
     { name = "omnibridge-blueprint-engine" },
     { name = "omnibridge-canonical-graph" },
     { name = "omnibridge-estimator" },
     { name = "omnibridge-rules-engine" },
+    { name = "omnibridge-validation-engine" },
     { name = "omnibridge-vmware-to-azure" },
     { name = "omnibridge-workflow-engine" },
     { name = "pydantic" },
@@ -524,10 +529,12 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "neo4j", specifier = ">=5.25.0" },
     { name = "omnibridge-agent-tools", editable = "packages/agent-tools" },
+    { name = "omnibridge-azure-migrate-adapter", editable = "packages/azure-migrate-adapter" },
     { name = "omnibridge-blueprint-engine", editable = "packages/blueprint-engine" },
     { name = "omnibridge-canonical-graph", editable = "packages/canonical-graph" },
     { name = "omnibridge-estimator", editable = "packages/estimator" },
     { name = "omnibridge-rules-engine", editable = "packages/rules-engine" },
+    { name = "omnibridge-validation-engine", editable = "packages/validation-engine" },
     { name = "omnibridge-vmware-to-azure", editable = "corridors/vmware-to-azure" },
     { name = "omnibridge-workflow-engine", editable = "packages/workflow-engine" },
     { name = "pydantic", specifier = ">=2.8.0" },
@@ -596,6 +603,17 @@ requires-dist = [
     { name = "omnibridge-canonical-graph", editable = "packages/canonical-graph" },
     { name = "pydantic", specifier = ">=2.8.0" },
 ]
+
+[[package]]
+name = "omnibridge-validation-engine"
+version = "0.1.0"
+source = { editable = "packages/validation-engine" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.8.0" }]
 
 [[package]]
 name = "omnibridge-vmware-to-azure"

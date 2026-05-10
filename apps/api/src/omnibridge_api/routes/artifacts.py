@@ -28,3 +28,11 @@ def release1_runbook_artifact() -> Response:
         content=build_release1_demo().runbook_markdown,
         media_type="text/markdown",
     )
+
+
+@router.get("/release1-main.tf")
+def release1_terraform_artifact() -> Response:
+    return Response(
+        content=build_release1_demo().terraform_main_tf,
+        media_type="text/plain",
+    )

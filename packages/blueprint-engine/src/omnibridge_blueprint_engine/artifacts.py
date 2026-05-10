@@ -84,6 +84,10 @@ def _yaml_list(items: tuple[str, ...], indent: str = "") -> list[str]:
     return [f"{indent}- {item}" for item in items]
 
 
+def _hcl_string_list(items: tuple[str, ...]) -> str:
+    return "[" + ", ".join(f'"{item}"' for item in items) + "]"
+
+
 def render_blueprint_yaml(blueprint: MigrationBlueprint) -> str:
     lines = [
         f"kind: {blueprint.kind}",
@@ -108,6 +112,110 @@ def render_blueprint_yaml(blueprint: MigrationBlueprint) -> str:
 
     lines.extend(["approval_gates:", *_yaml_list(blueprint.approval_gates, indent="  ")])
     return "\n".join(lines)
+
+
+def render_terraform_main_tf(
+    blueprint: MigrationBlueprint,
+    location: str,
+    resource_group_name: str,
+    subnet_id: str,
+) -> str:
+    return "\n".join(
+        [
+            f"# OmniBridge generated Terraform draft for {blueprint.application_name}",
+            "# Review and harden VM images, credentials, disks, and NSGs before deployment.",
+            "",
+            "terraform {",
+            "  required_providers {",
+            "    azurerm = {",
+            '      source  = "hashicorp/azurerm"',
+            '      version = "~> 4.0"',
+            "    }",
+            "  }",
+            "}",
+            "",
+            'provider "azurerm" {',
+            "  features {}",
+            "}",
+            "",
+            "locals {",
+            f'  project_id = "{blueprint.project_id}"',
+            f'  corridor = "{blueprint.corridor}"',
+            f'  application_name = "{blueprint.application_name}"',
+            f"  compute_node_names = {_hcl_string_list(blueprint.compute_node_names)}",
+            f"  approval_gates = {_hcl_string_list(blueprint.approval_gates)}",
+            "  common_tags = {",
+            '    managed_by = "omnibridge"',
+            "    project_id = local.project_id",
+            "    corridor = local.corridor",
+            "    application = local.application_name",
+            "  }",
+            "}",
+            "",
+            'resource "azurerm_resource_group" "migration" {',
+            f'  name     = "{resource_group_name}"',
+            f'  location = "{location}"',
+            "  tags     = local.common_tags",
+            "}",
+            "",
+            'resource "azurerm_network_interface" "vm_nic" {',
+            "  for_each            = toset(local.compute_node_names)",
+            '  name                = "${each.key}-nic01"',
+            "  location            = azurerm_resource_group.migration.location",
+            "  resource_group_name = azurerm_resource_group.migration.name",
+            "",
+            "  ip_configuration {",
+            '    name                          = "primary"',
+            f'    subnet_id                     = "{subnet_id}"',
+            '    private_ip_address_allocation = "Dynamic"',
+            "  }",
+            "",
+            "  tags = local.common_tags",
+            "}",
+            "",
+            'resource "azurerm_linux_virtual_machine" "vm" {',
+            "  for_each            = toset(local.compute_node_names)",
+            '  name                = each.key',
+            "  location            = azurerm_resource_group.migration.location",
+            "  resource_group_name = azurerm_resource_group.migration.name",
+            '  size                = "Standard_D4s_v5"',
+            '  admin_username      = "omnibridgeadmin"',
+            "  network_interface_ids = [",
+            "    azurerm_network_interface.vm_nic[each.key].id,",
+            "  ]",
+            "",
+            "  os_disk {",
+            '    caching              = "ReadWrite"',
+            '    storage_account_type = "Premium_LRS"',
+            "  }",
+            "",
+            "  source_image_reference {",
+            '    publisher = "Canonical"',
+            '    offer     = "0001-com-ubuntu-server-jammy"',
+            '    sku       = "22_04-lts-gen2"',
+            '    version   = "latest"',
+            "  }",
+            "",
+            "  disable_password_authentication = true",
+            "",
+            "  admin_ssh_key {",
+            '    username   = "omnibridgeadmin"',
+            '    public_key = var.admin_ssh_public_key',
+            "  }",
+            "",
+            "  tags = merge(local.common_tags, {",
+            '    migration_wave = "wave-001"',
+            '    source_platform = "vmware-vcenter"',
+            "  })",
+            "}",
+            "",
+            'variable "admin_ssh_public_key" {',
+            "  type        = string",
+            '  description = "Temporary SSH public key used for draft Linux VM resources."',
+            "  sensitive   = true",
+            "}",
+        ]
+    )
 
 
 def render_runbook_markdown(

@@ -82,6 +82,54 @@ describe("App", () => {
           },
         ],
       },
+      execution_plan: {
+        backend: "azure-migrate",
+        execution_mode: "dry_run",
+        wave_id: "wave-001",
+        operations: [
+          {
+            name: "ensure_migrate_project",
+            execution_mode: "dry_run",
+            approval_required: false,
+            approval_gate: null,
+            payload: {},
+          },
+          {
+            name: "start_test_migration",
+            execution_mode: "dry_run",
+            approval_required: true,
+            approval_gate: "test_migration_approval",
+            payload: {},
+          },
+        ],
+      },
+      validation_evidence: {
+        project_id: "project-acme-vmware-azure",
+        wave_id: "wave-001",
+        summary: {
+          total_checks: 18,
+          pending: 12,
+          passed: 0,
+          failed: 0,
+          blocked: 6,
+        },
+        checks: [
+          {
+            check_id: "vm_boot",
+            target_name: "claims-web-01",
+            status: "pending",
+            evidence: "Awaiting test migration execution.",
+            remediation: null,
+          },
+          {
+            check_id: "vm_boot",
+            target_name: "claims-db-01",
+            status: "blocked",
+            evidence: "Awaiting test migration execution.",
+            remediation: "Resolve preflight blockers before test migration.",
+          },
+        ],
+      },
       topology: {
         node_counts: {
           ComputeNode: 3,
@@ -245,6 +293,11 @@ describe("App", () => {
           href: "/artifacts/release1-runbook.md",
           kind: "markdown",
         },
+        {
+          label: "Terraform draft",
+          href: "/artifacts/release1-main.tf",
+          kind: "terraform",
+        },
       ],
     };
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
@@ -259,6 +312,23 @@ describe("App", () => {
           new Response(JSON.stringify({ nodes: 12, edges: 13, persisted: true }), {
             status: 200,
           }),
+        );
+      }
+
+      if (
+        path === "/approvals/release1-demo/commercial_estimate_approval/approve" &&
+        init?.method === "POST"
+      ) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              gate: "commercial_estimate_approval",
+              status: "approved",
+              actor: "consultant@example.com",
+              reason: "Approved from Consultant Workspace.",
+            }),
+            { status: 200 },
+          ),
         );
       }
 
@@ -285,6 +355,19 @@ describe("App", () => {
     expect(screen.getByText("BLUEPRINT_GENERATED")).toBeInTheDocument();
     expect(screen.getByText("6 pending")).toBeInTheDocument();
     expect(screen.getByText("commercial_estimate_approval")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Approve commercial_estimate_approval" }));
+    expect(await screen.findByText("5 pending")).toBeInTheDocument();
+    expect(screen.getByText("approved")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Azure Migrate execution plan" })).toBeInTheDocument();
+    expect(screen.getAllByText("dry_run").length).toBeGreaterThan(0);
+    expect(screen.getByText("start_test_migration")).toBeInTheDocument();
+    expect(screen.getAllByText("test_migration_approval").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Validation evidence" })).toBeInTheDocument();
+    expect(screen.getByText("18 checks")).toBeInTheDocument();
+    expect(screen.getAllByText("vm_boot").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Resolve preflight blockers before test migration."),
+    ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Canonical graph" })).toBeInTheDocument();
     expect(screen.getByText("ComputeNode: 3")).toBeInTheDocument();
     expect(screen.getByText("RUNS_ON")).toBeInTheDocument();
@@ -310,10 +393,18 @@ describe("App", () => {
       "href",
       "/artifacts/release1-runbook.md",
     );
+    expect(screen.getByRole("link", { name: "Terraform draft terraform" })).toHaveAttribute(
+      "href",
+      "/artifacts/release1-main.tf",
+    );
 
     expect(fetchMock).toHaveBeenCalledWith("/workspace/release1-demo");
     expect(fetchMock).toHaveBeenCalledWith(
       "/imports/vmware-fixture",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/approvals/release1-demo/commercial_estimate_approval/approve",
       expect.objectContaining({ method: "POST" }),
     );
   });

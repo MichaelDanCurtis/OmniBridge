@@ -310,6 +310,32 @@ h2 {
   text-transform: uppercase;
 }
 
+.approval-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.inline-action {
+  background: #ffffff;
+  border: 1px solid #cfe2dc;
+  border-radius: 6px;
+  color: #116149;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+  min-height: 30px;
+  padding: 4px 8px;
+}
+
+.inline-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .artifact-section {
   border-top: 1px solid #e3e8ef;
   margin-top: 18px;
@@ -377,7 +403,8 @@ h2 {
 }
 
 .readiness-pill,
-.severity {
+.severity,
+.validation-status {
   border-radius: 999px;
   display: inline-flex;
   font-size: 0.76rem;
@@ -398,19 +425,29 @@ h2 {
 }
 
 .readiness-pill--blocked,
-.severity--blocker {
+.severity--blocker,
+.validation-status--blocked,
+.validation-status--failed {
   background: #fff1f0;
   color: #b42318;
 }
 
-.severity--warning {
+.severity--warning,
+.validation-status--pending {
   background: #fff7ed;
   color: #9a5b13;
 }
 
+.validation-status--passed {
+  background: #edf5f2;
+  color: #116149;
+}
+
 .mapping-list,
 .finding-list,
-.target-list {
+.target-list,
+.operation-list,
+.validation-list {
   display: grid;
   gap: 12px;
   list-style: none;
@@ -420,7 +457,9 @@ h2 {
 
 .mapping-list li,
 .finding-list li,
-.target-list li {
+.target-list li,
+.operation-list li,
+.validation-list li {
   background: #f8fafc;
   border: 1px solid #dce3ec;
   border-radius: 6px;
@@ -436,23 +475,27 @@ h2 {
 
 .mapping-list span,
 .target-list span,
-.finding-list span {
+.finding-list span,
+.validation-list span {
   color: #536174;
   font-size: 0.84rem;
 }
 
 .mapping-list p,
-.finding-list p {
+.finding-list p,
+.validation-list p {
   color: #344256;
   margin: 8px 0 0;
 }
 
-.finding-list li {
+.finding-list li,
+.validation-list li {
   display: grid;
   gap: 8px;
 }
 
-.finding-list li > div {
+.finding-list li > div,
+.validation-list li > div {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -462,6 +505,23 @@ h2 {
 .target-list li {
   display: grid;
   gap: 4px;
+}
+
+.operation-list li {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.operation-list strong,
+.operation-list span {
+  display: block;
+}
+
+.operation-list span {
+  color: #536174;
+  font-size: 0.82rem;
 }
 
 .metric-grid {

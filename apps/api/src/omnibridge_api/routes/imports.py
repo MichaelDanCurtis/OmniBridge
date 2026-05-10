@@ -7,6 +7,7 @@ from neo4j import GraphDatabase
 from pydantic import BaseModel
 
 from omnibridge_api.settings import settings
+from omnibridge_canonical_graph.knowledge_seed import build_vmware_to_azure_knowledge_seed
 from omnibridge_canonical_graph.repository import Neo4jGraphRepository
 from omnibridge_vmware_to_azure.fixture_loader import load_fixture
 from omnibridge_vmware_to_azure.mapper import map_fixture_to_graph
@@ -26,6 +27,12 @@ class FixtureImportResponse(BaseModel):
     nodes: int
     edges: int
     persisted: bool
+
+
+class KnowledgeSeedImportRequest(BaseModel):
+    project_id: str
+    tenant_id: str
+    persist_to_neo4j: bool = False
 
 
 @lru_cache(maxsize=1)
@@ -101,5 +108,34 @@ def import_vmware_fixture(
     return FixtureImportResponse(
         nodes=len(graph.nodes),
         edges=len(graph.edges),
+        persisted=persisted,
+    )
+
+
+@router.post("/knowledge-seed/vmware-to-azure", response_model=FixtureImportResponse)
+def import_vmware_to_azure_knowledge_seed(
+    request: KnowledgeSeedImportRequest,
+    graph_repository: Annotated[
+        Neo4jGraphRepository | None,
+        Depends(get_graph_repository),
+    ],
+) -> FixtureImportResponse:
+    seed = build_vmware_to_azure_knowledge_seed(
+        project_id=request.project_id,
+        tenant_id=request.tenant_id,
+    )
+    persisted = False
+
+    if request.persist_to_neo4j:
+        if graph_repository is None:
+            raise HTTPException(status_code=503, detail="Neo4j graph repository is not configured.")
+
+        graph_repository.bootstrap_schema()
+        graph_repository.ingest_graph(nodes=list(seed.nodes), edges=list(seed.edges))
+        persisted = True
+
+    return FixtureImportResponse(
+        nodes=len(seed.nodes),
+        edges=len(seed.edges),
         persisted=persisted,
     )

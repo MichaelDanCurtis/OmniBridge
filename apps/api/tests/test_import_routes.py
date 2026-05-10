@@ -55,6 +55,49 @@ def test_import_fixture_route_can_persist_to_graph_repository() -> None:
     assert repository.ingested_edge_count == 13
 
 
+def test_import_knowledge_seed_route_can_persist_to_graph_repository() -> None:
+    repository = RecordingGraphRepository()
+    app.dependency_overrides[get_graph_repository] = lambda: repository
+    client = TestClient(app)
+
+    try:
+        response = client.post(
+            "/imports/knowledge-seed/vmware-to-azure",
+            json={
+                "project_id": "project-acme-vmware-azure",
+                "tenant_id": "tenant-acme",
+                "persist_to_neo4j": True,
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {"nodes": 10, "edges": 9, "persisted": True}
+    assert repository.schema_bootstrapped is True
+    assert repository.ingested_node_count == 10
+    assert repository.ingested_edge_count == 9
+
+
+def test_import_knowledge_seed_route_requires_graph_repository_when_persisting() -> None:
+    app.dependency_overrides[get_graph_repository] = lambda: None
+    client = TestClient(app)
+
+    try:
+        response = client.post(
+            "/imports/knowledge-seed/vmware-to-azure",
+            json={
+                "project_id": "project-acme-vmware-azure",
+                "tenant_id": "tenant-acme",
+                "persist_to_neo4j": True,
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+
+
 def test_import_fixture_route_requires_graph_repository_when_persisting() -> None:
     app.dependency_overrides[get_graph_repository] = lambda: None
     client = TestClient(app)

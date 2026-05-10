@@ -5,10 +5,12 @@ requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115.0",
   "omnibridge-agent-tools",
+  "omnibridge-azure-migrate-adapter",
   "omnibridge-blueprint-engine",
   "omnibridge-canonical-graph",
   "omnibridge-estimator",
   "omnibridge-rules-engine",
+  "omnibridge-validation-engine",
   "omnibridge-workflow-engine",
   "omnibridge-vmware-to-azure",
   "uvicorn[standard]>=0.30.0",

@@ -14,6 +14,7 @@ dev = [
   "omnibridge-canonical-graph",
   "omnibridge-estimator",
   "omnibridge-rules-engine",
+  "omnibridge-validation-engine",
   "omnibridge-vmware-to-azure",
   "omnibridge-workflow-engine",
   "pytest>=8.0.0",
@@ -28,6 +29,7 @@ members = [
   "packages/estimator",
   "packages/blueprint-engine",
   "packages/rules-engine",
+  "packages/validation-engine",
   "packages/agent-tools",
   "packages/workflow-engine",
   "corridors/vmware-to-azure",
@@ -41,6 +43,7 @@ omnibridge-blueprint-engine = { workspace = true }
 omnibridge-canonical-graph = { workspace = true }
 omnibridge-estimator = { workspace = true }
 omnibridge-rules-engine = { workspace = true }
+omnibridge-validation-engine = { workspace = true }
 omnibridge-vmware-to-azure = { workspace = true }
 omnibridge-workflow-engine = { workspace = true }
 
@@ -52,6 +55,7 @@ testpaths = [
   "packages/estimator/tests",
   "packages/blueprint-engine/tests",
   "packages/rules-engine/tests",
+  "packages/validation-engine/tests",
   "packages/agent-tools/tests",
   "packages/workflow-engine/tests",
   "corridors/vmware-to-azure/tests",
