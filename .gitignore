@@ -6,6 +6,7 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+.worktrees/
 
 # Environment and secrets
 .env
@@ -32,4 +33,3 @@ __pycache__/
 .ruff_cache/
 .venv/
 venv/
-
