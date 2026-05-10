@@ -32,3 +32,23 @@ Future platform code should keep these boundaries:
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/CORRIDOR_CONTRACT.md](docs/CORRIDOR_CONTRACT.md)
 - [corridors/vmware-to-azure/README.md](corridors/vmware-to-azure/README.md)
+
+## Local Development
+
+Start infrastructure services:
+
+```bash
+make stack-up
+```
+
+Run Python tests:
+
+```bash
+make test-python
+```
+
+Run web tests:
+
+```bash
+make test-web
+```
