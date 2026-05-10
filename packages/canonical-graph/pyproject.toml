@@ -2,7 +2,7 @@
 name = "omnibridge-canonical-graph"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["pydantic>=2.8.0"]
+dependencies = ["neo4j>=5.25.0", "pydantic>=2.8.0"]
 
 [build-system]
 requires = ["hatchling"]

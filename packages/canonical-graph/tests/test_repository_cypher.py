@@ -37,3 +37,4 @@ def test_build_relationship_merge_uses_relationship_type() -> None:
     assert "MERGE (a)-[r:DEPENDS_ON {id: $id}]->(b)" in query
     assert params["source_id"] == "node-a"
     assert params["target_id"] == "node-b"
+    assert params["relationship_type"] == "DEPENDS_ON"

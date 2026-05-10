@@ -528,11 +528,15 @@ name = "omnibridge-canonical-graph"
 version = "0.1.0"
 source = { editable = "packages/canonical-graph" }
 dependencies = [
+    { name = "neo4j" },
     { name = "pydantic" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.8.0" }]
+requires-dist = [
+    { name = "neo4j", specifier = ">=5.25.0" },
+    { name = "pydantic", specifier = ">=2.8.0" },
+]
 
 [[package]]
 name = "omnibridge-estimator"
