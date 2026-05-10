@@ -1,0 +1,170 @@
+export type GraphSummary = {
+  compute_nodes: number;
+  network_segments: number;
+  applications: number;
+  readiness_findings: number;
+  blockers: number;
+  warnings: number;
+  total_storage_gb: number;
+};
+
+export type EstimateLineItem = {
+  code: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unit_price_usd: number;
+  total_usd: number;
+};
+
+export type CommercialEstimate = {
+  project_package: string;
+  pricing_model: string;
+  asset_count: number;
+  complexity_score: number;
+  complexity_band: string;
+  base_project_fee_usd: number;
+  estimated_agent_usage_usd: number;
+  estimated_agent_tokens: number;
+  agent_token_rate_per_1k_usd: number;
+  project_fee_line_items: EstimateLineItem[];
+  agent_usage_line_items: EstimateLineItem[];
+  assumptions: string[];
+};
+
+export type MigrationWave = {
+  name: string;
+  compute_nodes: string[];
+  execution_backend: string;
+};
+
+export type MigrationBlueprint = {
+  application_name: string;
+  compute_node_names: string[];
+  waves: MigrationWave[];
+  approval_gates: string[];
+};
+
+export type AnalysisResult = {
+  summary: string;
+  requires_consultant_review: boolean;
+  decision_points: string[];
+};
+
+export type ProjectContext = {
+  name: string;
+  corridor: string;
+  source: {
+    platform: string;
+    vcenter: string;
+    datacenter: string;
+  };
+  target: {
+    cloud: string;
+    region: string;
+    resource_group: string;
+  };
+};
+
+export type VmInventoryItem = {
+  name: string;
+  moid: string;
+  cpu: number;
+  memory_mb: number;
+  guest_os: string;
+  tools_status: string;
+  snapshot_count: number;
+  disk_gb: number;
+  source_network: string;
+  observed_ip: string;
+  readiness: string;
+  target: {
+    region: string;
+    resource_group: string;
+    subnet: string;
+    vm_size: string;
+    disk_type: string;
+  };
+};
+
+export type NetworkMapping = {
+  source_portgroup: string;
+  vlan: number;
+  target_vnet: string;
+  target_subnet: string;
+  security_intent: string;
+};
+
+export type TopologyEdge = {
+  source_id?: string;
+  source_name: string;
+  relationship_type: string;
+  target_id?: string;
+  target_name: string;
+  confidence?: number;
+  evidence?: string[];
+};
+
+export type TopologySummary = {
+  node_counts: Record<string, number>;
+  relationship_counts: Record<string, number>;
+  edges: TopologyEdge[];
+};
+
+export type ReadinessFinding = {
+  rule_id: string;
+  severity: string;
+  target_node_id: string;
+  target_name: string;
+  message: string;
+};
+
+export type GeneratedArtifact = {
+  label: string;
+  href: string;
+  kind: string;
+};
+
+export type WorkspaceData = {
+  project: ProjectContext;
+  summary: GraphSummary;
+  inventory: {
+    vms: VmInventoryItem[];
+  };
+  topology: TopologySummary;
+  network_mappings: NetworkMapping[];
+  readiness: {
+    blockers: number;
+    warnings: number;
+    findings: ReadinessFinding[];
+  };
+  target_design: {
+    vnet: string;
+    subnets: string[];
+    vm_targets: Array<{
+      name: string;
+      vm_size: string;
+      subnet: string;
+      disk_type: string;
+    }>;
+  };
+  estimate: CommercialEstimate;
+  blueprint: MigrationBlueprint;
+  analysis: AnalysisResult;
+  artifact_href: string;
+  artifacts: GeneratedArtifact[];
+};
+
+async function requestJson<T>(path: string): Promise<T> {
+  const response = await fetch(path);
+
+  if (!response.ok) {
+    throw new Error(`Request failed for ${path}: ${response.status}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export async function loadWorkspaceData(): Promise<WorkspaceData> {
+  return requestJson<WorkspaceData>("/workspace/release1-demo");
+}

@@ -17,6 +17,15 @@ def test_estimate_counts_compute_nodes_and_complexity() -> None:
     assert estimate.complexity_band == "medium"
     assert estimate.estimated_agent_usage_usd > 0
     assert estimate.base_project_fee_usd > 0
+    assert estimate.pricing_model == "project_fee_plus_agent_token_usage"
+    assert sum(item.total_usd for item in estimate.project_fee_line_items) == 27250
+    assert estimate.project_fee_line_items[0].code == "assessment_base"
+    assert estimate.project_fee_line_items[1].quantity == 3
+    assert estimate.project_fee_line_items[1].unit_price_usd == 750
+    assert estimate.estimated_agent_tokens == 9_000_000
+    assert estimate.agent_token_rate_per_1k_usd == 0.20
+    assert estimate.agent_usage_line_items[0].quantity == 9000
+    assert estimate.agent_usage_line_items[0].total_usd == estimate.estimated_agent_usage_usd
 
 
 def test_estimate_rejects_negative_inputs() -> None:

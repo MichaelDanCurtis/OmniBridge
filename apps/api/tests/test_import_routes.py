@@ -12,8 +12,8 @@ def test_import_fixture_route_returns_counts() -> None:
     )
 
     assert response.status_code == 200
-    assert response.json()["nodes"] == 6
-    assert response.json()["edges"] == 3
+    assert response.json()["nodes"] == 12
+    assert response.json()["edges"] == 13
 
 
 def test_import_fixture_route_rejects_out_of_scope_path() -> None:

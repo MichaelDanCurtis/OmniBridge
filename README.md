@@ -64,3 +64,27 @@ Run web tests:
 ```bash
 make test-web
 ```
+
+Run the Release 1 demo locally:
+
+```bash
+make dev-api
+make dev-web
+```
+
+The web app is served at `http://127.0.0.1:5174/`.
+
+The OmniBridge API defaults to `http://127.0.0.1:8001/` for local demo work so it does not collide with other FastAPI services that often occupy port `8000`.
+
+Useful demo endpoints:
+
+- `GET /workspace/release1-demo`
+- `GET /artifacts/release1-assessment.md`
+- `GET /artifacts/release1-blueprint.yaml`
+- `GET /artifacts/release1-runbook.md`
+
+Run the full MVP verification:
+
+```bash
+make verify-release1
+```

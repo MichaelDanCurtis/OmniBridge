@@ -1,10 +1,15 @@
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from omnibridge_agent_tools.models import AnalysisResult
 from omnibridge_agent_tools.analysis_workflow import run_fixture_analysis
-from omnibridge_blueprint_engine.artifacts import render_assessment_markdown
+from omnibridge_blueprint_engine.artifacts import (
+    render_assessment_markdown,
+    render_blueprint_yaml,
+    render_runbook_markdown,
+)
 from omnibridge_blueprint_engine.generator import generate_vmware_to_azure_blueprint
 from omnibridge_blueprint_engine.models import MigrationBlueprint
 from omnibridge_canonical_graph.models import GraphNode
@@ -33,6 +38,9 @@ class Release1Demo:
     blueprint: MigrationBlueprint
     analysis: AnalysisResult
     assessment_markdown: str
+    blueprint_yaml: str
+    runbook_markdown: str
+    workspace: dict[str, Any]
 
 
 def _has_label(node: GraphNode, label: str) -> bool:
@@ -59,12 +67,233 @@ def _storage_gb(fixture: dict[str, Any]) -> int:
     )
 
 
+def _vm_storage_gb(vm: dict[str, Any]) -> int:
+    return sum(int(disk.get("size_gb", 0)) for disk in vm.get("disks", []))
+
+
 def _readiness_findings(nodes: list[GraphNode]) -> list[ReadinessFinding]:
     return [
         finding
         for node in nodes
         for finding in evaluate_vmware_vm(node)
     ]
+
+
+def _node_display_name(node: GraphNode) -> str:
+    name = node.properties.get("name")
+    if isinstance(name, str):
+        return name
+    return node.id
+
+
+def _build_topology(graph: MappedGraph) -> dict[str, Any]:
+    nodes_by_id = {node.id: node for node in graph.nodes}
+    node_counts = Counter(label for node in graph.nodes for label in node.labels)
+    relationship_counts = Counter(edge.relationship_type for edge in graph.edges)
+    edges = [
+        {
+            "source_id": edge.source_id,
+            "source_name": _node_display_name(nodes_by_id[edge.source_id]),
+            "relationship_type": edge.relationship_type,
+            "target_id": edge.target_id,
+            "target_name": _node_display_name(nodes_by_id[edge.target_id]),
+            "confidence": edge.confidence,
+            "evidence": list(edge.evidence),
+        }
+        for edge in graph.edges
+    ]
+
+    return {
+        "node_counts": dict(sorted(node_counts.items())),
+        "relationship_counts": dict(sorted(relationship_counts.items())),
+        "edges": edges,
+    }
+
+
+def _target_subnet(source_portgroup: str) -> str:
+    normalized = source_portgroup.lower()
+    if "web" in normalized:
+        return "snet-web"
+    if "app" in normalized:
+        return "snet-app"
+    if "db" in normalized:
+        return "snet-db"
+    return "snet-shared"
+
+
+def _security_intent(target_subnet: str) -> str:
+    match target_subnet:
+        case "snet-web":
+            return "Allow HTTPS from application gateway or approved ingress."
+        case "snet-app":
+            return "Allow application traffic from web tier only."
+        case "snet-db":
+            return "Allow SQL traffic from app tier only."
+        case _:
+            return "Requires consultant review before NSG generation."
+
+
+def _vm_size(vm: dict[str, Any]) -> str:
+    cpu = int(vm["cpu"])
+    memory_mb = int(vm["memory_mb"])
+    if cpu >= 8 or memory_mb >= 32768:
+        return "Standard_D8s_v5"
+    if cpu >= 4 or memory_mb >= 16384:
+        return "Standard_D4s_v5"
+    return "Standard_D2s_v5"
+
+
+def _disk_type(vm: dict[str, Any], target_subnet: str) -> str:
+    if target_subnet == "snet-db" or _vm_storage_gb(vm) >= 512:
+        return "Premium SSD"
+    return "Standard SSD"
+
+
+def _readiness_status(vm_id: str, findings: list[ReadinessFinding]) -> str:
+    vm_findings = [finding for finding in findings if finding.target_node_id == vm_id]
+    if any(finding.severity == "blocker" for finding in vm_findings):
+        return "Blocked"
+    if any(finding.severity == "warning" for finding in vm_findings):
+        return "Needs review"
+    return "Ready"
+
+
+def _build_workspace(
+    fixture: dict[str, Any],
+    graph: MappedGraph,
+    graph_summary: dict[str, int],
+    findings: list[ReadinessFinding],
+    estimate: CommercialEstimate,
+    blueprint: MigrationBlueprint,
+    analysis: AnalysisResult,
+) -> dict[str, Any]:
+    networks_by_moid = {network["moid"]: network for network in fixture["networks"]}
+    node_names = {
+        f"vm:{vm['moid']}": vm["name"]
+        for vm in fixture["vms"]
+    }
+    blocker_count = sum(finding.severity == "blocker" for finding in findings)
+    warning_count = sum(finding.severity == "warning" for finding in findings)
+    network_mappings = [
+        {
+            "source_portgroup": network["name"],
+            "vlan": network["vlan"],
+            "target_vnet": "vnet-prod",
+            "target_subnet": _target_subnet(str(network["name"])),
+            "security_intent": _security_intent(_target_subnet(str(network["name"]))),
+        }
+        for network in fixture["networks"]
+    ]
+    vms: list[dict[str, Any]] = []
+
+    for vm in fixture["vms"]:
+        vm_id = f"vm:{vm['moid']}"
+        primary_nic = vm["nics"][0]
+        source_network = networks_by_moid[primary_nic["network_moid"]]
+        target_subnet = _target_subnet(str(source_network["name"]))
+        vms.append(
+            {
+                "name": vm["name"],
+                "moid": vm["moid"],
+                "cpu": vm["cpu"],
+                "memory_mb": vm["memory_mb"],
+                "guest_os": vm["guest_os"],
+                "tools_status": vm["tools_status"],
+                "snapshot_count": vm["snapshot_count"],
+                "disk_gb": _vm_storage_gb(vm),
+                "source_network": source_network["name"],
+                "observed_ip": primary_nic["ip"],
+                "readiness": _readiness_status(vm_id, findings),
+                "target": {
+                    "region": "westus2",
+                    "resource_group": "rg-claims-prod",
+                    "subnet": target_subnet,
+                    "vm_size": _vm_size(vm),
+                    "disk_type": _disk_type(vm, target_subnet),
+                },
+            }
+        )
+
+    return {
+        "project": {
+            "name": PROJECT_NAME,
+            "tenant_id": fixture["tenant_id"],
+            "corridor": "vmware-to-azure",
+            "source": {
+                "platform": "vmware-vcenter",
+                "vcenter": fixture["vcenter"],
+                "datacenter": fixture["datacenter"],
+            },
+            "target": {
+                "cloud": "azure",
+                "region": "westus2",
+                "resource_group": "rg-claims-prod",
+            },
+        },
+        "summary": {
+            **graph_summary,
+            "blockers": blocker_count,
+            "warnings": warning_count,
+            "total_storage_gb": _storage_gb(fixture),
+        },
+        "application": {
+            "name": APPLICATION_NAME,
+            "members": list(blueprint.compute_node_names),
+        },
+        "inventory": {
+            "clusters": fixture["clusters"],
+            "datastores": fixture["datastores"],
+            "networks": fixture["networks"],
+            "vms": vms,
+        },
+        "topology": _build_topology(graph),
+        "network_mappings": network_mappings,
+        "readiness": {
+            "blockers": blocker_count,
+            "warnings": warning_count,
+            "findings": [
+                {
+                    **finding.model_dump(),
+                    "target_name": node_names.get(finding.target_node_id, finding.target_node_id),
+                }
+                for finding in findings
+            ],
+        },
+        "target_design": {
+            "vnet": "vnet-prod",
+            "subnets": ["snet-web", "snet-app", "snet-db"],
+            "vm_targets": [
+                {
+                    "name": vm["name"],
+                    "vm_size": vm["target"]["vm_size"],
+                    "subnet": vm["target"]["subnet"],
+                    "disk_type": vm["target"]["disk_type"],
+                }
+                for vm in vms
+            ],
+        },
+        "estimate": estimate.model_dump(),
+        "blueprint": blueprint.model_dump(mode="json"),
+        "analysis": analysis.model_dump(),
+        "artifact_href": "/artifacts/release1-assessment.md",
+        "artifacts": [
+            {
+                "label": "Assessment summary",
+                "href": "/artifacts/release1-assessment.md",
+                "kind": "markdown",
+            },
+            {
+                "label": "Migration blueprint",
+                "href": "/artifacts/release1-blueprint.yaml",
+                "kind": "yaml",
+            },
+            {
+                "label": "Cutover runbook",
+                "href": "/artifacts/release1-runbook.md",
+                "kind": "markdown",
+            },
+        ],
+    }
 
 
 def build_release1_demo(
@@ -113,6 +342,26 @@ def build_release1_demo(
             project_name=PROJECT_NAME,
             application_name=APPLICATION_NAME,
             blockers=blocker_count,
-            estimate_usd=estimate.base_project_fee_usd,
+            estimate=estimate,
+        ),
+        blueprint_yaml=render_blueprint_yaml(blueprint),
+        runbook_markdown=render_runbook_markdown(
+            project_name=PROJECT_NAME,
+            blueprint=blueprint,
+            blocker_count=blocker_count,
+        ),
+        workspace=_build_workspace(
+            fixture=fixture,
+            graph=graph,
+            graph_summary={
+                "compute_nodes": len(compute_nodes),
+                "network_segments": len(network_segments),
+                "applications": 1 if compute_nodes else 0,
+                "readiness_findings": len(findings),
+            },
+            findings=findings,
+            estimate=estimate,
+            blueprint=blueprint,
+            analysis=analysis,
         ),
     )
