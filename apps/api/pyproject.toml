@@ -7,6 +7,7 @@ dependencies = [
   "omnibridge-agent-tools",
   "omnibridge-blueprint-engine",
   "omnibridge-estimator",
+  "omnibridge-rules-engine",
   "omnibridge-vmware-to-azure",
   "uvicorn[standard]>=0.30.0",
   "pydantic>=2.8.0",

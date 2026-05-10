@@ -38,7 +38,8 @@ def build_node_merge(node: GraphNode) -> tuple[str, dict[str, object]]:
     _reject_reserved_properties(node.properties, _RESERVED_NODE_PROPERTIES)
     labels = _labels_fragment(node.labels)
     query = (
-        f"MERGE (n{labels} {{id: $id}}) "
+        f"MERGE (n{labels} "
+        "{id: $id, project_id: $project_id, tenant_id: $tenant_id}) "
         "SET n.project_id = $project_id, "
         "n.tenant_id = $tenant_id, "
         "n += $properties "
@@ -51,9 +52,12 @@ def build_node_merge(node: GraphNode) -> tuple[str, dict[str, object]]:
 def build_relationship_merge(edge: GraphEdge) -> tuple[str, dict[str, object]]:
     _reject_reserved_properties(edge.properties, _RESERVED_EDGE_PROPERTIES)
     query = (
-        "MATCH (a:GraphNode {id: $source_id}) "
-        "MATCH (b:GraphNode {id: $target_id}) "
-        f"MERGE (a)-[r:{edge.relationship_type} {{id: $id}}]->(b) "
+        "MATCH (a:GraphNode "
+        "{id: $source_id, project_id: $project_id, tenant_id: $tenant_id}) "
+        "MATCH (b:GraphNode "
+        "{id: $target_id, project_id: $project_id, tenant_id: $tenant_id}) "
+        f"MERGE (a)-[r:{edge.relationship_type} "
+        "{id: $id, project_id: $project_id, tenant_id: $tenant_id}]->(b) "
         "SET r.project_id = $project_id, "
         "r.tenant_id = $tenant_id, "
         "r.confidence = $confidence, "

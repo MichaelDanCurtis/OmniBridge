@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Response
 
-from omnibridge_blueprint_engine.artifacts import render_assessment_markdown
+from omnibridge_api.release1_demo import build_release1_demo
 
 
 router = APIRouter(prefix="/artifacts", tags=["artifacts"])
@@ -8,10 +8,7 @@ router = APIRouter(prefix="/artifacts", tags=["artifacts"])
 
 @router.get("/release1-assessment.md")
 def release1_assessment_artifact() -> Response:
-    markdown = render_assessment_markdown(
-        project_name="ACME VMware-to-Azure Assessment",
-        application_name="Claims Portal",
-        blockers=1,
-        estimate_usd=27250,
+    return Response(
+        content=build_release1_demo().assessment_markdown,
+        media_type="text/markdown",
     )
-    return Response(content=markdown, media_type="text/markdown")
