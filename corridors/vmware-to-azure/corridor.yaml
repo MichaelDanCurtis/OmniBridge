@@ -1,0 +1,83 @@
+kind: migration.corridor
+version: 1
+name: vmware-to-azure
+display_name: VMware to Azure
+status: release-1
+
+source_platforms:
+  - vmware-vcenter
+
+target_platforms:
+  - azure
+
+capabilities:
+  discovery: supported
+  assessment: supported
+  target_design: supported
+  estimation: supported
+  blueprint_generation: supported
+  artifact_generation: prototype
+  execution_mapping: prototype
+  execution_orchestration: planned
+  validation: planned
+  custom_conversion: not_supported
+
+execution_backends:
+  - azure-migrate
+  - manual-runbook
+
+canonical_primitives:
+  - ComputeNode
+  - StorageVolume
+  - NetworkInterface
+  - NetworkSegment
+  - Application
+  - ServiceEndpoint
+  - DataStore
+  - Environment
+  - Owner
+  - CostCenter
+  - SecurityPolicy
+
+required_connectors:
+  - vmware-vcenter
+  - azure-arm
+
+optional_connectors:
+  - azure-migrate
+  - vmware-nsx
+  - guest-inventory
+
+artifact_templates:
+  - assessment-report
+  - commercial-estimate
+  - migration-blueprint
+  - target-architecture
+  - cutover-runbook
+  - validation-plan
+  - sow-scope-package
+
+readiness_rule_sets:
+  - vmware-vm-readiness
+  - vmware-network-mapping
+  - azure-target-quota
+  - azure-sku-availability
+
+validation_rule_sets:
+  - azure-vm-boot
+  - azure-agent-health
+  - disk-attachment
+  - nic-addressing
+  - service-port-checks
+
+estimation_model: vmware-to-azure-estimator-v1
+
+approval_gates:
+  - discovery_authorization
+  - commercial_estimate_approval
+  - target_design_approval
+  - test_migration_approval
+  - source_shutdown_approval
+  - cutover_approval
+  - decommission_approval
+
