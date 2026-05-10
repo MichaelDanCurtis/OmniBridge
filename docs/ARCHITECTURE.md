@@ -343,6 +343,33 @@ Required capabilities:
 - reproduce approved blueprints from the graph version that generated them
 - explain why a change order was triggered
 
+### Repository Contract
+
+The canonical graph package owns the Neo4j persistence contract.
+
+Current repository responsibilities:
+
+- bootstrap Neo4j constraints and project-scoped indexes
+- upsert canonical graph nodes
+- upsert canonical graph relationships after nodes exist
+- ingest a complete mapped graph as nodes first, relationships second
+- return project topology summaries for agent tools and consultant surfaces
+
+The API import path can run in two modes:
+
+- import and count a fixture without persistence
+- import, bootstrap schema, and persist the graph into Neo4j when `persist_to_neo4j` is requested
+
+Local Neo4j configuration uses:
+
+```text
+OMNIBRIDGE_NEO4J_URI
+OMNIBRIDGE_NEO4J_USER
+OMNIBRIDGE_NEO4J_PASSWORD
+```
+
+This gives corridor discovery a deterministic path into the canonical graph before GraphRAG and production agents query it.
+
 ## 6. GraphRAG Architecture
 
 GraphRAG is a core agent capability, not a side feature.
@@ -804,4 +831,3 @@ Definition of done:
 - [LangFlow agents](https://docs.langflow.org/agents)
 - [Langfuse documentation](https://langfuse.com/docs/)
 - [Azure Migrate REST API](https://learn.microsoft.com/en-us/rest/api/migrate/)
-

@@ -6,6 +6,7 @@ dependencies = [
   "fastapi>=0.115.0",
   "omnibridge-agent-tools",
   "omnibridge-blueprint-engine",
+  "omnibridge-canonical-graph",
   "omnibridge-estimator",
   "omnibridge-rules-engine",
   "omnibridge-vmware-to-azure",

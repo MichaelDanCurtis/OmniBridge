@@ -1,8 +1,13 @@
+from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from neo4j import GraphDatabase
 from pydantic import BaseModel
 
+from omnibridge_api.settings import settings
+from omnibridge_canonical_graph.repository import Neo4jGraphRepository
 from omnibridge_vmware_to_azure.fixture_loader import load_fixture
 from omnibridge_vmware_to_azure.mapper import map_fixture_to_graph
 
@@ -14,11 +19,34 @@ _VMWARE_FIXTURE_ROOT = _REPO_ROOT / "corridors" / "vmware-to-azure" / "fixtures"
 
 class FixtureImportRequest(BaseModel):
     fixture_path: str
+    persist_to_neo4j: bool = False
 
 
 class FixtureImportResponse(BaseModel):
     nodes: int
     edges: int
+    persisted: bool
+
+
+@lru_cache(maxsize=1)
+def _cached_neo4j_repository(
+    uri: str,
+    user: str,
+    password: str,
+) -> Neo4jGraphRepository:
+    driver = GraphDatabase.driver(uri, auth=(user, password))
+    return Neo4jGraphRepository(driver)
+
+
+def get_graph_repository() -> Neo4jGraphRepository | None:
+    if not settings.neo4j_uri or not settings.neo4j_password:
+        return None
+
+    return _cached_neo4j_repository(
+        settings.neo4j_uri,
+        settings.neo4j_user,
+        settings.neo4j_password,
+    )
 
 
 def _is_relative_to(path: Path, root: Path) -> bool:
@@ -51,7 +79,27 @@ def _resolve_vmware_fixture_path(fixture_path: str) -> Path:
 
 
 @router.post("/vmware-fixture", response_model=FixtureImportResponse)
-def import_vmware_fixture(request: FixtureImportRequest) -> FixtureImportResponse:
+def import_vmware_fixture(
+    request: FixtureImportRequest,
+    graph_repository: Annotated[
+        Neo4jGraphRepository | None,
+        Depends(get_graph_repository),
+    ],
+) -> FixtureImportResponse:
     fixture = load_fixture(_resolve_vmware_fixture_path(request.fixture_path))
     graph = map_fixture_to_graph(fixture)
-    return FixtureImportResponse(nodes=len(graph.nodes), edges=len(graph.edges))
+    persisted = False
+
+    if request.persist_to_neo4j:
+        if graph_repository is None:
+            raise HTTPException(status_code=503, detail="Neo4j graph repository is not configured.")
+
+        graph_repository.bootstrap_schema()
+        graph_repository.ingest_graph(nodes=graph.nodes, edges=graph.edges)
+        persisted = True
+
+    return FixtureImportResponse(
+        nodes=len(graph.nodes),
+        edges=len(graph.edges),
+        persisted=persisted,
+    )

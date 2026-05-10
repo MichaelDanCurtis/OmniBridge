@@ -79,9 +79,26 @@ The OmniBridge API defaults to `http://127.0.0.1:8001/` for local demo work so i
 Useful demo endpoints:
 
 - `GET /workspace/release1-demo`
+- `POST /imports/vmware-fixture`
 - `GET /artifacts/release1-assessment.md`
 - `GET /artifacts/release1-blueprint.yaml`
 - `GET /artifacts/release1-runbook.md`
+
+Import the fixture without persistence:
+
+```bash
+curl -sS http://127.0.0.1:8001/imports/vmware-fixture \
+  -H 'Content-Type: application/json' \
+  -d '{"fixture_path":"corridors/vmware-to-azure/fixtures/acme-small-estate.json"}'
+```
+
+Import the fixture and persist the canonical graph into Neo4j:
+
+```bash
+curl -sS http://127.0.0.1:8001/imports/vmware-fixture \
+  -H 'Content-Type: application/json' \
+  -d '{"fixture_path":"corridors/vmware-to-azure/fixtures/acme-small-estate.json","persist_to_neo4j":true}'
+```
 
 Run the full MVP verification:
 

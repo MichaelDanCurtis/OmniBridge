@@ -68,3 +68,23 @@ class GraphEdge(GraphModel):
         default_factory=dict,
         validate_default=True,
     )
+
+
+class GraphTopologyEdge(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    source_id: str
+    source_name: str
+    relationship_type: GraphRelationshipType
+    target_id: str
+    target_name: str
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    evidence: tuple[str, ...] = Field(default_factory=tuple)
+
+
+class ProjectTopology(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    node_counts: dict[str, int]
+    relationship_counts: dict[str, int]
+    edges: tuple[GraphTopologyEdge, ...] = Field(default_factory=tuple)
