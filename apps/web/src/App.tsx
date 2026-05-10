@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { loadWorkspaceData, type WorkspaceData } from "./api";
+import {
+  loadWorkspaceData,
+  persistFixtureGraph,
+  type GraphIngestStatus,
+  type WorkspaceData,
+} from "./api";
 
 const FALLBACK_PROJECT_TITLE = "ACME VMware-to-Azure Assessment";
 
@@ -95,6 +100,9 @@ function WorkspaceError() {
 }
 
 function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
+  const [graphIngest, setGraphIngest] = useState<GraphIngestStatus>(data.graph_ingest);
+  const [graphPersistError, setGraphPersistError] = useState<string | null>(null);
+  const [isPersistingGraph, setIsPersistingGraph] = useState(false);
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       {
@@ -149,6 +157,29 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
     [data.topology.relationship_counts],
   );
   const topologyEdges = data.topology.edges.slice(0, 8);
+  const graphStatusLabel = graphIngest.persisted
+    ? "Persisted to Neo4j"
+    : graphIngest.neo4j_configured
+      ? "Ready to persist"
+      : "Neo4j not configured";
+
+  async function handlePersistGraph() {
+    setIsPersistingGraph(true);
+    setGraphPersistError(null);
+    try {
+      const result = await persistFixtureGraph();
+      setGraphIngest({
+        ...graphIngest,
+        edge_count: result.edges,
+        node_count: result.nodes,
+        persisted: result.persisted,
+      });
+    } catch {
+      setGraphPersistError("Graph persistence failed");
+    } finally {
+      setIsPersistingGraph(false);
+    }
+  }
 
   return (
     <main className="workspace-shell">
@@ -224,10 +255,25 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
             </div>
           </dl>
           <div className="approval-section">
-            <p className="eyebrow">Required gates</p>
+            <div className="approval-heading">
+              <div>
+                <p className="eyebrow">Workflow state</p>
+                <h2>Approval ledger</h2>
+              </div>
+              <span className="count-badge">{data.workflow.pending_approval_count} pending</span>
+            </div>
+            <div className="metric-grid">
+              <div>
+                <span>Current state</span>
+                <strong>{data.workflow.state}</strong>
+              </div>
+            </div>
             <ul className="approval-list">
-              {data.blueprint.approval_gates.map((gate) => (
-                <li key={gate}>{gate}</li>
+              {data.workflow.approvals.map((approval) => (
+                <li key={approval.gate}>
+                  <span>{approval.gate}</span>
+                  <strong>{approval.status}</strong>
+                </li>
               ))}
             </ul>
           </div>
@@ -357,6 +403,43 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
               </li>
             ))}
           </ul>
+        </article>
+      </section>
+
+      <section className="workspace-grid workspace-grid--balanced" aria-label="Graph operations">
+        <article className="work-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Discovery import</p>
+              <h2>Graph persistence</h2>
+            </div>
+            <span className="status-pill">{graphStatusLabel}</span>
+          </div>
+          <div className="metric-grid">
+            <div>
+              <span>Import source</span>
+              <strong>{graphIngest.source}</strong>
+            </div>
+            <div>
+              <span>Graph size</span>
+              <strong>
+                {graphIngest.node_count} nodes / {graphIngest.edge_count} edges
+              </strong>
+            </div>
+            <div>
+              <span>Repository</span>
+              <strong>{graphIngest.neo4j_configured ? "Neo4j configured" : "Neo4j not configured"}</strong>
+            </div>
+          </div>
+          <button
+            className="secondary-action"
+            disabled={isPersistingGraph}
+            onClick={handlePersistGraph}
+            type="button"
+          >
+            {isPersistingGraph ? "Persisting..." : "Persist to Neo4j"}
+          </button>
+          {graphPersistError ? <p className="error-message">{graphPersistError}</p> : null}
         </article>
       </section>
 

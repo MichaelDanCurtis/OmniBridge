@@ -101,6 +101,25 @@ h2 {
   background: #0d543f;
 }
 
+.secondary-action {
+  align-items: center;
+  background: #edf5f2;
+  border: 1px solid #cfe2dc;
+  border-radius: 6px;
+  color: #116149;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+.secondary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .assessment-panel,
 .work-panel {
   padding: 22px;
@@ -256,6 +275,14 @@ h2 {
   padding-top: 18px;
 }
 
+.approval-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
 .approval-list {
   display: grid;
   gap: 8px;
@@ -265,13 +292,22 @@ h2 {
 }
 
 .approval-list li {
+  align-items: center;
   background: #f8fafc;
   border: 1px solid #dce3ec;
   border-radius: 6px;
   color: #121925;
+  display: flex;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.82rem;
+  gap: 10px;
+  justify-content: space-between;
   padding: 8px 10px;
+}
+
+.approval-list strong {
+  color: #116149;
+  text-transform: uppercase;
 }
 
 .artifact-section {

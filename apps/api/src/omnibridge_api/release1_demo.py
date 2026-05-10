@@ -5,6 +5,7 @@ from typing import Any
 
 from omnibridge_agent_tools.models import AnalysisResult
 from omnibridge_agent_tools.analysis_workflow import run_fixture_analysis
+from omnibridge_api.settings import settings
 from omnibridge_blueprint_engine.artifacts import (
     render_assessment_markdown,
     render_blueprint_yaml,
@@ -19,6 +20,11 @@ from omnibridge_rules_engine.models import ReadinessFinding
 from omnibridge_rules_engine.vmware_readiness import evaluate_vmware_vm
 from omnibridge_vmware_to_azure.fixture_loader import load_fixture
 from omnibridge_vmware_to_azure.mapper import MappedGraph, map_fixture_to_graph
+from omnibridge_workflow_engine.models import (
+    ApprovalLedger,
+    ProjectWorkflowSnapshot,
+    WorkflowState,
+)
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -246,6 +252,17 @@ def _build_workspace(
             "networks": fixture["networks"],
             "vms": vms,
         },
+        "graph_ingest": {
+            "source": "fixture",
+            "node_count": len(graph.nodes),
+            "edge_count": len(graph.edges),
+            "persisted": False,
+            "neo4j_configured": bool(settings.neo4j_uri and settings.neo4j_password),
+        },
+        "workflow": ProjectWorkflowSnapshot(
+            state=WorkflowState.BLUEPRINT_GENERATED,
+            approvals=ApprovalLedger.seed_release1().records,
+        ).model_dump(mode="json"),
         "topology": _build_topology(graph),
         "network_mappings": network_mappings,
         "readiness": {

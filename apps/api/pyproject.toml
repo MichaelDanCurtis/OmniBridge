@@ -9,6 +9,7 @@ dependencies = [
   "omnibridge-canonical-graph",
   "omnibridge-estimator",
   "omnibridge-rules-engine",
+  "omnibridge-workflow-engine",
   "omnibridge-vmware-to-azure",
   "uvicorn[standard]>=0.30.0",
   "pydantic>=2.8.0",

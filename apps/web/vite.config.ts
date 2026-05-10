@@ -6,8 +6,10 @@ const apiTarget = process.env.VITE_OMNIBRIDGE_API_TARGET ?? "http://127.0.0.1:80
 export default defineConfig({
   plugins: [react()],
   server: {
+    allowedHosts: ["host.docker.internal"],
     proxy: {
       "/analysis": apiTarget,
+      "/approvals": apiTarget,
       "/artifacts": apiTarget,
       "/blueprints": apiTarget,
       "/estimates": apiTarget,

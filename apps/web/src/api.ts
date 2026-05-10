@@ -111,6 +111,33 @@ export type TopologySummary = {
   edges: TopologyEdge[];
 };
 
+export type GraphIngestStatus = {
+  source: string;
+  node_count: number;
+  edge_count: number;
+  persisted: boolean;
+  neo4j_configured: boolean;
+};
+
+export type GraphImportResponse = {
+  nodes: number;
+  edges: number;
+  persisted: boolean;
+};
+
+export type ApprovalRecord = {
+  gate: string;
+  status: string;
+  actor: string | null;
+  reason: string | null;
+};
+
+export type ProjectWorkflow = {
+  state: string;
+  approvals: ApprovalRecord[];
+  pending_approval_count: number;
+};
+
 export type ReadinessFinding = {
   rule_id: string;
   severity: string;
@@ -131,6 +158,8 @@ export type WorkspaceData = {
   inventory: {
     vms: VmInventoryItem[];
   };
+  graph_ingest: GraphIngestStatus;
+  workflow: ProjectWorkflow;
   topology: TopologySummary;
   network_mappings: NetworkMapping[];
   readiness: {
@@ -167,4 +196,23 @@ async function requestJson<T>(path: string): Promise<T> {
 
 export async function loadWorkspaceData(): Promise<WorkspaceData> {
   return requestJson<WorkspaceData>("/workspace/release1-demo");
+}
+
+export async function persistFixtureGraph(): Promise<GraphImportResponse> {
+  const response = await fetch("/imports/vmware-fixture", {
+    body: JSON.stringify({
+      fixture_path: "corridors/vmware-to-azure/fixtures/acme-small-estate.json",
+      persist_to_neo4j: true,
+    }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Graph persistence failed: ${response.status}`);
+  }
+
+  return response.json() as Promise<GraphImportResponse>;
 }

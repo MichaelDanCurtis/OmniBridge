@@ -1,6 +1,31 @@
 from fastapi.testclient import TestClient
 
 from omnibridge_api.main import app
+from omnibridge_api.routes.analysis import get_analysis_graph_repository
+from omnibridge_canonical_graph.models import GraphTopologyEdge, ProjectTopology
+
+
+class FakeAnalysisGraphRepository:
+    def fetch_project_topology(
+        self,
+        project_id: str,
+        tenant_id: str,
+        edge_limit: int = 100,
+    ) -> ProjectTopology:
+        return ProjectTopology(
+            node_counts={"ComputeNode": 3, "Host": 1},
+            relationship_counts={"RUNS_ON": 3},
+            edges=(
+                GraphTopologyEdge(
+                    source_id="vm:vm-103",
+                    source_name="claims-db-01",
+                    relationship_type="RUNS_ON",
+                    target_id="host:host-101",
+                    target_name="esx01",
+                    evidence=("vmware.vm.host_moid",),
+                ),
+            ),
+        )
 
 
 def test_estimate_endpoint_returns_commercial_estimate() -> None:
@@ -34,6 +59,38 @@ def test_analysis_endpoint_returns_decision_points() -> None:
     response = client.get("/analysis/release1-demo")
     assert response.status_code == 200
     assert response.json()["requires_consultant_review"] is True
+    assert response.json()["analysis_source"] == "fixture"
+
+
+def test_analysis_endpoint_can_use_graph_context_when_available() -> None:
+    app.dependency_overrides[get_analysis_graph_repository] = lambda: FakeAnalysisGraphRepository()
+    client = TestClient(app)
+
+    try:
+        response = client.get("/analysis/release1-demo?mode=graph")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["analysis_source"] == "graph"
+    assert payload["graph_context_summary"].startswith(
+        "Project project-acme-vmware-azure has"
+    )
+    assert "claims-db-01 -[RUNS_ON]-> esx01" in payload["graph_evidence_edges"]
+
+
+def test_analysis_endpoint_falls_back_when_graph_mode_is_unconfigured() -> None:
+    app.dependency_overrides[get_analysis_graph_repository] = lambda: None
+    client = TestClient(app)
+
+    try:
+        response = client.get("/analysis/release1-demo?mode=graph")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["analysis_source"] == "fixture_fallback"
 
 
 def test_artifact_endpoint_returns_markdown_assessment() -> None:
@@ -64,6 +121,28 @@ def test_artifact_endpoints_return_blueprint_and_runbook() -> None:
     assert "claims-db-01" in runbook.text
 
 
+def test_approval_routes_return_and_update_release1_ledger() -> None:
+    client = TestClient(app)
+
+    response = client.get("/approvals/release1-demo")
+
+    assert response.status_code == 200
+    assert response.json()["state"] == "BLUEPRINT_GENERATED"
+    assert response.json()["pending_approval_count"] == 6
+
+    approve_response = client.post(
+        "/approvals/release1-demo/commercial_estimate_approval/approve",
+        json={
+            "actor": "consultant@example.com",
+            "reason": "Customer approved the estimate.",
+        },
+    )
+
+    assert approve_response.status_code == 200
+    assert approve_response.json()["gate"] == "commercial_estimate_approval"
+    assert approve_response.json()["status"] == "approved"
+
+
 def test_workspace_endpoint_returns_consultant_workspace_sections() -> None:
     client = TestClient(app)
     response = client.get("/workspace/release1-demo")
@@ -76,6 +155,15 @@ def test_workspace_endpoint_returns_consultant_workspace_sections() -> None:
     assert workspace["summary"]["blockers"] == 1
     assert workspace["summary"]["warnings"] == 1
     assert workspace["summary"]["total_storage_gb"] == 1280
+    assert workspace["graph_ingest"] == {
+        "source": "fixture",
+        "node_count": 12,
+        "edge_count": 13,
+        "persisted": False,
+        "neo4j_configured": False,
+    }
+    assert workspace["workflow"]["state"] == "BLUEPRINT_GENERATED"
+    assert workspace["workflow"]["pending_approval_count"] == 6
     assert workspace["topology"]["node_counts"]["ComputeNode"] == 3
     assert workspace["topology"]["node_counts"]["Host"] == 1
     assert workspace["topology"]["relationship_counts"]["RUNS_ON"] == 3

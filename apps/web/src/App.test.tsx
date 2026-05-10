@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
@@ -32,6 +32,55 @@ describe("App", () => {
         blockers: 1,
         warnings: 1,
         total_storage_gb: 1280,
+      },
+      graph_ingest: {
+        source: "fixture",
+        node_count: 12,
+        edge_count: 13,
+        persisted: false,
+        neo4j_configured: false,
+      },
+      workflow: {
+        state: "BLUEPRINT_GENERATED",
+        pending_approval_count: 6,
+        approvals: [
+          {
+            gate: "commercial_estimate_approval",
+            status: "pending",
+            actor: null,
+            reason: null,
+          },
+          {
+            gate: "target_design_approval",
+            status: "pending",
+            actor: null,
+            reason: null,
+          },
+          {
+            gate: "blueprint_approval",
+            status: "pending",
+            actor: null,
+            reason: null,
+          },
+          {
+            gate: "test_migration_approval",
+            status: "pending",
+            actor: null,
+            reason: null,
+          },
+          {
+            gate: "source_shutdown_approval",
+            status: "pending",
+            actor: null,
+            reason: null,
+          },
+          {
+            gate: "cutover_approval",
+            status: "pending",
+            actor: null,
+            reason: null,
+          },
+        ],
       },
       topology: {
         node_counts: {
@@ -198,14 +247,22 @@ describe("App", () => {
         },
       ],
     };
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
       const path = input.toString();
 
-      if (path !== "/workspace/release1-demo") {
-        return Promise.resolve(new Response("Not found", { status: 404 }));
+      if (path === "/workspace/release1-demo") {
+        return Promise.resolve(new Response(JSON.stringify(workspaceResponse), { status: 200 }));
       }
 
-      return Promise.resolve(new Response(JSON.stringify(workspaceResponse), { status: 200 }));
+      if (path === "/imports/vmware-fixture" && init?.method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ nodes: 12, edges: 13, persisted: true }), {
+            status: 200,
+          }),
+        );
+      }
+
+      return Promise.resolve(new Response("Not found", { status: 404 }));
     });
 
     render(<App />);
@@ -224,10 +281,19 @@ describe("App", () => {
     expect(screen.getByText("compute_node_assessment")).toBeInTheDocument();
     expect(screen.getByText("9,000,000 tokens")).toBeInTheDocument();
     expect(screen.getByText("$0.20 / 1k tokens")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Approval ledger" })).toBeInTheDocument();
+    expect(screen.getByText("BLUEPRINT_GENERATED")).toBeInTheDocument();
+    expect(screen.getByText("6 pending")).toBeInTheDocument();
+    expect(screen.getByText("commercial_estimate_approval")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Canonical graph" })).toBeInTheDocument();
     expect(screen.getByText("ComputeNode: 3")).toBeInTheDocument();
     expect(screen.getByText("RUNS_ON")).toBeInTheDocument();
     expect(screen.getByText("HAS_VOLUME")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Graph persistence" })).toBeInTheDocument();
+    expect(screen.getByText("12 nodes / 13 edges")).toBeInTheDocument();
+    expect(screen.getAllByText("Neo4j not configured").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Persist to Neo4j" }));
+    expect(await screen.findByText("Persisted to Neo4j")).toBeInTheDocument();
     expect(screen.getByText("Confirm whether claims-db-01 snapshot can be removed.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Estate inventory" })).toBeInTheDocument();
     expect(screen.getAllByText("claims-db-01").length).toBeGreaterThan(0);
@@ -246,6 +312,10 @@ describe("App", () => {
     );
 
     expect(fetchMock).toHaveBeenCalledWith("/workspace/release1-demo");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/imports/vmware-fixture",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   it("shows a recoverable error when the workspace API cannot be loaded", async () => {

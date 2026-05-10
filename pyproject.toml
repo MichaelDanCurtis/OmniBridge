@@ -9,11 +9,13 @@ dev = [
   "httpx>=0.28.0",
   "omnibridge-agent-tools",
   "omnibridge-api",
+  "omnibridge-azure-migrate-adapter",
   "omnibridge-blueprint-engine",
   "omnibridge-canonical-graph",
   "omnibridge-estimator",
   "omnibridge-rules-engine",
   "omnibridge-vmware-to-azure",
+  "omnibridge-workflow-engine",
   "pytest>=8.0.0",
   "ruff>=0.8.0",
 ]
@@ -22,30 +24,36 @@ dev = [
 members = [
   "apps/api",
   "packages/canonical-graph",
+  "packages/azure-migrate-adapter",
   "packages/estimator",
   "packages/blueprint-engine",
   "packages/rules-engine",
   "packages/agent-tools",
+  "packages/workflow-engine",
   "corridors/vmware-to-azure",
 ]
 
 [tool.uv.sources]
 omnibridge-agent-tools = { workspace = true }
 omnibridge-api = { workspace = true }
+omnibridge-azure-migrate-adapter = { workspace = true }
 omnibridge-blueprint-engine = { workspace = true }
 omnibridge-canonical-graph = { workspace = true }
 omnibridge-estimator = { workspace = true }
 omnibridge-rules-engine = { workspace = true }
 omnibridge-vmware-to-azure = { workspace = true }
+omnibridge-workflow-engine = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = [
   "apps/api/tests",
+  "packages/azure-migrate-adapter/tests",
   "packages/canonical-graph/tests",
   "packages/estimator/tests",
   "packages/blueprint-engine/tests",
   "packages/rules-engine/tests",
   "packages/agent-tools/tests",
+  "packages/workflow-engine/tests",
   "corridors/vmware-to-azure/tests",
 ]
 
