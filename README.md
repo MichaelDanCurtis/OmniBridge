@@ -35,6 +35,18 @@ Future platform code should keep these boundaries:
 
 ## Local Development
 
+Prerequisites:
+
+- Docker with Docker Compose
+- `uv`
+- `pnpm`
+
+Create a local environment file:
+
+```bash
+cp .env.example .env
+```
+
 Start infrastructure services:
 
 ```bash

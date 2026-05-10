@@ -1,0 +1,7 @@
+{
+  "name": "@omnibridge/web",
+  "private": true,
+  "scripts": {
+    "test": "echo \"web app shell is not scaffolded yet\""
+  }
+}

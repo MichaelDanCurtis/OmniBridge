@@ -33,6 +33,20 @@ services:
     volumes:
       - minio_data:/data
 
+  minio-init:
+    image: minio/mc:RELEASE.2026-01-05T16-24-30Z
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set omnibridge http://minio:9000 omnibridge omnibridge-dev-password; do
+        sleep 1;
+      done;
+      until mc mb --ignore-existing omnibridge/omnibridge-artifacts; do
+        sleep 1;
+      done;
+      "
+
 volumes:
   neo4j_data:
   postgres_data:
