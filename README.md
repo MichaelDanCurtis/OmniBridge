@@ -29,6 +29,6 @@ Future platform code should keep these boundaries:
 ## Start Here
 
 - [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md)
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/CORRIDOR_CONTRACT.md](docs/CORRIDOR_CONTRACT.md)
 - [corridors/vmware-to-azure/README.md](corridors/vmware-to-azure/README.md)
-
