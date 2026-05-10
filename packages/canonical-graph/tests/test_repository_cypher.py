@@ -1,3 +1,5 @@
+import pytest
+
 from omnibridge_canonical_graph.models import GraphEdge, GraphNode
 from omnibridge_canonical_graph.repository import (
     build_node_merge,
@@ -38,3 +40,31 @@ def test_build_relationship_merge_uses_relationship_type() -> None:
     assert params["source_id"] == "node-a"
     assert params["target_id"] == "node-b"
     assert params["relationship_type"] == "DEPENDS_ON"
+
+
+def test_build_node_merge_rejects_reserved_properties() -> None:
+    node = GraphNode(
+        id="node-1",
+        project_id="project-1",
+        tenant_id="tenant-1",
+        labels=["ComputeNode"],
+        properties={"id": "corrupt-node-id"},
+    )
+
+    with pytest.raises(ValueError, match="reserved graph properties"):
+        build_node_merge(node)
+
+
+def test_build_relationship_merge_rejects_reserved_properties() -> None:
+    edge = GraphEdge(
+        id="edge-1",
+        project_id="project-1",
+        tenant_id="tenant-1",
+        source_id="node-a",
+        target_id="node-b",
+        relationship_type="DEPENDS_ON",
+        properties={"confidence": 0.1},
+    )
+
+    with pytest.raises(ValueError, match="reserved graph properties"):
+        build_relationship_merge(edge)

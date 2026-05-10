@@ -1,8 +1,22 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from neo4j import Driver
 
 from omnibridge_canonical_graph.models import GraphEdge, GraphNode
+
+_RESERVED_NODE_PROPERTIES = frozenset({"id", "project_id", "tenant_id", "labels"})
+_RESERVED_EDGE_PROPERTIES = frozenset(
+    {
+        "id",
+        "project_id",
+        "tenant_id",
+        "source_id",
+        "target_id",
+        "relationship_type",
+        "confidence",
+        "evidence",
+    }
+)
 
 
 def _labels_fragment(labels: Sequence[str]) -> str:
@@ -10,7 +24,18 @@ def _labels_fragment(labels: Sequence[str]) -> str:
     return ":" + ":".join(dict.fromkeys(clean_labels))
 
 
+def _reject_reserved_properties(
+    properties: Mapping[str, object],
+    reserved: frozenset[str],
+) -> None:
+    conflicts = sorted(set(properties).intersection(reserved))
+    if conflicts:
+        conflict_list = ", ".join(conflicts)
+        raise ValueError(f"properties cannot use reserved graph properties: {conflict_list}")
+
+
 def build_node_merge(node: GraphNode) -> tuple[str, dict[str, object]]:
+    _reject_reserved_properties(node.properties, _RESERVED_NODE_PROPERTIES)
     labels = _labels_fragment(node.labels)
     query = (
         f"MERGE (n{labels} {{id: $id}}) "
@@ -24,6 +49,7 @@ def build_node_merge(node: GraphNode) -> tuple[str, dict[str, object]]:
 
 
 def build_relationship_merge(edge: GraphEdge) -> tuple[str, dict[str, object]]:
+    _reject_reserved_properties(edge.properties, _RESERVED_EDGE_PROPERTIES)
     query = (
         "MATCH (a:GraphNode {id: $source_id}) "
         "MATCH (b:GraphNode {id: $target_id}) "
