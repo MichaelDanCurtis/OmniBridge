@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from omnibridge_api.routes.analysis import router as analysis_router
+from omnibridge_api.routes.artifacts import router as artifacts_router
 from omnibridge_api.routes.blueprints import router as blueprints_router
 from omnibridge_api.routes.estimates import router as estimates_router
 from omnibridge_api.routes.graph import router as graph_router
@@ -13,6 +14,7 @@ app.include_router(graph_router)
 app.include_router(estimates_router)
 app.include_router(blueprints_router)
 app.include_router(analysis_router)
+app.include_router(artifacts_router)
 
 
 @app.get("/health")

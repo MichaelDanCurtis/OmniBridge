@@ -34,3 +34,11 @@ def test_analysis_endpoint_returns_decision_points() -> None:
     response = client.get("/analysis/release1-demo")
     assert response.status_code == 200
     assert response.json()["requires_consultant_review"] is True
+
+
+def test_artifact_endpoint_returns_markdown_assessment() -> None:
+    client = TestClient(app)
+    response = client.get("/artifacts/release1-assessment.md")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/markdown")
+    assert "# ACME VMware-to-Azure Assessment" in response.text
