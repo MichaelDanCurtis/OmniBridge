@@ -396,6 +396,15 @@ User or workflow question
    -> answer cites graph evidence and assumptions
 ```
 
+Current agent graph tooling starts with a bounded topology context tool. The tool receives `project_id`, `tenant_id`, and an edge limit, calls the canonical graph repository, and returns:
+
+- a short topology summary
+- node counts by label
+- relationship counts by type
+- evidence edge strings suitable for agent context
+
+This is intentionally narrower than arbitrary Cypher. It gives LangGraph workflows graph awareness while preserving the rule that agents reason over typed tools.
+
 Agent responses should distinguish:
 
 - observed facts

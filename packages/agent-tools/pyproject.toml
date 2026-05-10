@@ -6,6 +6,7 @@ dependencies = [
   "pydantic>=2.8.0",
   "langgraph>=1.0.0",
   "langfuse>=3.0.0",
+  "omnibridge-canonical-graph",
 ]
 
 [build-system]

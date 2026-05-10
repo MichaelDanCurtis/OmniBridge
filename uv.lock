@@ -483,6 +483,7 @@ source = { editable = "packages/agent-tools" }
 dependencies = [
     { name = "langfuse" },
     { name = "langgraph" },
+    { name = "omnibridge-canonical-graph" },
     { name = "pydantic" },
 ]
 
@@ -490,6 +491,7 @@ dependencies = [
 requires-dist = [
     { name = "langfuse", specifier = ">=3.0.0" },
     { name = "langgraph", specifier = ">=1.0.0" },
+    { name = "omnibridge-canonical-graph", editable = "packages/canonical-graph" },
     { name = "pydantic", specifier = ">=2.8.0" },
 ]
 
