@@ -7,7 +7,13 @@ dependencies = []
 [dependency-groups]
 dev = [
   "httpx>=0.28.0",
+  "omnibridge-agent-tools",
   "omnibridge-api",
+  "omnibridge-blueprint-engine",
+  "omnibridge-canonical-graph",
+  "omnibridge-estimator",
+  "omnibridge-rules-engine",
+  "omnibridge-vmware-to-azure",
   "pytest>=8.0.0",
   "ruff>=0.8.0",
 ]
@@ -24,8 +30,13 @@ members = [
 ]
 
 [tool.uv.sources]
+omnibridge-agent-tools = { workspace = true }
 omnibridge-api = { workspace = true }
+omnibridge-blueprint-engine = { workspace = true }
 omnibridge-canonical-graph = { workspace = true }
+omnibridge-estimator = { workspace = true }
+omnibridge-rules-engine = { workspace = true }
+omnibridge-vmware-to-azure = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = [

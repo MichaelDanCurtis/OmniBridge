@@ -449,7 +449,13 @@ source = { virtual = "." }
 [package.dev-dependencies]
 dev = [
     { name = "httpx" },
+    { name = "omnibridge-agent-tools" },
     { name = "omnibridge-api" },
+    { name = "omnibridge-blueprint-engine" },
+    { name = "omnibridge-canonical-graph" },
+    { name = "omnibridge-estimator" },
+    { name = "omnibridge-rules-engine" },
+    { name = "omnibridge-vmware-to-azure" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -459,7 +465,13 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "httpx", specifier = ">=0.28.0" },
+    { name = "omnibridge-agent-tools", editable = "packages/agent-tools" },
     { name = "omnibridge-api", editable = "apps/api" },
+    { name = "omnibridge-blueprint-engine", editable = "packages/blueprint-engine" },
+    { name = "omnibridge-canonical-graph", editable = "packages/canonical-graph" },
+    { name = "omnibridge-estimator", editable = "packages/estimator" },
+    { name = "omnibridge-rules-engine", editable = "packages/rules-engine" },
+    { name = "omnibridge-vmware-to-azure", editable = "corridors/vmware-to-azure" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "ruff", specifier = ">=0.8.0" },
 ]
