@@ -4,7 +4,9 @@ from omnibridge_vmware_to_azure.fixture_loader import load_fixture
 from omnibridge_vmware_to_azure.mapper import map_fixture_to_graph
 
 
-FIXTURE_PATH = Path("corridors/vmware-to-azure/fixtures/acme-small-estate.json")
+FIXTURE_PATH = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "acme-small-estate.json"
+)
 
 
 def test_fixture_maps_vms_to_compute_nodes() -> None:
