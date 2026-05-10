@@ -16,6 +16,28 @@ def test_import_fixture_route_returns_counts() -> None:
     assert response.json()["edges"] == 3
 
 
+def test_import_fixture_route_rejects_out_of_scope_path() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/imports/vmware-fixture",
+        json={"fixture_path": "pyproject.toml"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_import_fixture_route_rejects_missing_fixture() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/imports/vmware-fixture",
+        json={"fixture_path": "missing-fixture.json"},
+    )
+
+    assert response.status_code == 400
+
+
 def test_graph_summary_route_returns_shape() -> None:
     client = TestClient(app)
 
