@@ -1,0 +1,114 @@
+{
+  "project_id": "project-acme-vmware-azure",
+  "tenant_id": "tenant-acme",
+  "vcenter": "vcsa-prod-01",
+  "datacenter": "DC1",
+  "clusters": [
+    {
+      "moid": "domain-c1",
+      "name": "Prod-Cluster"
+    }
+  ],
+  "hosts": [
+    {
+      "moid": "host-101",
+      "name": "esx01",
+      "cluster_moid": "domain-c1"
+    }
+  ],
+  "datastores": [
+    {
+      "moid": "datastore-11",
+      "name": "datastore-prod-01",
+      "capacity_gb": 4096
+    }
+  ],
+  "networks": [
+    {
+      "moid": "dvportgroup-120",
+      "name": "dvpg-web-prod",
+      "vlan": 120
+    },
+    {
+      "moid": "dvportgroup-121",
+      "name": "dvpg-app-prod",
+      "vlan": 121
+    },
+    {
+      "moid": "dvportgroup-122",
+      "name": "dvpg-db-prod",
+      "vlan": 122
+    }
+  ],
+  "vms": [
+    {
+      "moid": "vm-101",
+      "name": "claims-web-01",
+      "cluster_moid": "domain-c1",
+      "host_moid": "host-101",
+      "cpu": 2,
+      "memory_mb": 8192,
+      "guest_os": "windowsServer2019",
+      "tools_status": "toolsOk",
+      "snapshot_count": 0,
+      "nics": [
+        {
+          "network_moid": "dvportgroup-120",
+          "ip": "10.20.10.11"
+        }
+      ],
+      "disks": [
+        {
+          "datastore_moid": "datastore-11",
+          "size_gb": 128
+        }
+      ]
+    },
+    {
+      "moid": "vm-102",
+      "name": "claims-api-01",
+      "cluster_moid": "domain-c1",
+      "host_moid": "host-101",
+      "cpu": 4,
+      "memory_mb": 16384,
+      "guest_os": "windowsServer2019",
+      "tools_status": "toolsOk",
+      "snapshot_count": 0,
+      "nics": [
+        {
+          "network_moid": "dvportgroup-121",
+          "ip": "10.20.20.21"
+        }
+      ],
+      "disks": [
+        {
+          "datastore_moid": "datastore-11",
+          "size_gb": 128
+        }
+      ]
+    },
+    {
+      "moid": "vm-103",
+      "name": "claims-db-01",
+      "cluster_moid": "domain-c1",
+      "host_moid": "host-101",
+      "cpu": 8,
+      "memory_mb": 32768,
+      "guest_os": "windowsServer2019",
+      "tools_status": "toolsOld",
+      "snapshot_count": 1,
+      "nics": [
+        {
+          "network_moid": "dvportgroup-122",
+          "ip": "10.20.30.31"
+        }
+      ],
+      "disks": [
+        {
+          "datastore_moid": "datastore-11",
+          "size_gb": 1024
+        }
+      ]
+    }
+  ]
+}
