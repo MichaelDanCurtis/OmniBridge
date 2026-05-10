@@ -14,7 +14,7 @@ def test_graph_node_requires_identity_fields() -> None:
     )
 
     assert node.id == "node-1"
-    assert node.labels == ["ComputeNode"]
+    assert node.labels == ("ComputeNode",)
     assert node.properties["name"] == "claims-api-01"
 
 
@@ -32,7 +32,7 @@ def test_graph_edge_carries_confidence_and_evidence() -> None:
 
     assert edge.relationship_type == "DEPENDS_ON"
     assert edge.confidence == 0.91
-    assert edge.evidence == ["observed_tcp_1433_flow"]
+    assert edge.evidence == ("observed_tcp_1433_flow",)
 
 
 @pytest.mark.parametrize("confidence", [-0.01, 1.01])
@@ -101,7 +101,49 @@ def test_graph_properties_reject_nested_dict_values() -> None:
         )
 
 
-def test_mutable_defaults_are_independent_between_instances() -> None:
+def test_appending_unsafe_label_after_construction_is_not_possible() -> None:
+    node = GraphNode(
+        id="node-1",
+        project_id="project-1",
+        tenant_id="tenant-1",
+        labels=["ComputeNode"],
+    )
+
+    with pytest.raises(AttributeError):
+        getattr(node.labels, "append")("Bad Label")
+
+
+def test_changing_relationship_type_after_construction_is_rejected() -> None:
+    edge = GraphEdge(
+        id="edge-1",
+        project_id="project-1",
+        tenant_id="tenant-1",
+        source_id="node-api",
+        target_id="node-db",
+        relationship_type="DEPENDS_ON",
+    )
+
+    with pytest.raises(ValidationError):
+        edge.relationship_type = "DEPENDS_ON_DELETE"
+
+
+def test_mutating_properties_after_construction_is_rejected() -> None:
+    node = GraphNode(
+        id="node-1",
+        project_id="project-1",
+        tenant_id="tenant-1",
+        labels=["ComputeNode"],
+        properties={"ports": [80, 443]},
+    )
+
+    with pytest.raises(TypeError):
+        node.properties["name"] = "claims-api-01"
+
+    with pytest.raises(AttributeError):
+        getattr(node.properties["ports"], "append")(8443)
+
+
+def test_immutable_defaults_are_independent_between_instances() -> None:
     first_node = GraphNode(
         id="node-1",
         project_id="project-1",
@@ -131,10 +173,11 @@ def test_mutable_defaults_are_independent_between_instances() -> None:
         relationship_type="DEPENDS_ON",
     )
 
-    first_node.properties["name"] = "claims-api-01"
-    first_edge.properties["port"] = 1433
-    first_edge.evidence.append("observed_tcp_1433_flow")
-
+    assert first_node.properties is not second_node.properties
+    assert first_edge.properties is not second_edge.properties
+    assert first_node.properties == {}
     assert second_node.properties == {}
+    assert first_edge.properties == {}
     assert second_edge.properties == {}
-    assert second_edge.evidence == []
+    assert first_edge.evidence == ()
+    assert second_edge.evidence == ()
