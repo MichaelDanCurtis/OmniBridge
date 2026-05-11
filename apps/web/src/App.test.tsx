@@ -393,6 +393,36 @@ describe("App", () => {
         );
       }
 
+      if (path === "/migration-waves/release1-demo" && init?.method === "POST") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              wave_id: "wave-001",
+              status: "ready_for_test_migration",
+              selected_compute_nodes: ["claims-db-01"],
+              execution_backend: "azure-migrate",
+              operation_count: 5,
+              approval_gates: [
+                "test_migration_approval",
+                "source_shutdown_approval",
+                "cutover_approval",
+              ],
+              ready_count: 0,
+              blocked_count: 1,
+              blockers: [
+                {
+                  name: "claims-db-01",
+                  readiness: "Blocked",
+                  message: "claims-db-01 has one or more VMware snapshots.",
+                },
+              ],
+              next_action: "Resolve blockers before test migration.",
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+
       return Promise.resolve(new Response("Not found", { status: 404 }));
     });
 
@@ -420,10 +450,11 @@ describe("App", () => {
     expect(await screen.findByText("5 pending")).toBeInTheDocument();
     expect(screen.getByText("Estimate approved")).toBeInTheDocument();
     expect(screen.getByText("1 VM selected for wave-001")).toBeInTheDocument();
-    const scopeCheckbox = screen.getByRole("checkbox", { name: "claims-db-01" });
-    expect(scopeCheckbox).toBeChecked();
-    fireEvent.click(scopeCheckbox);
-    expect(screen.getByText("0 VMs selected for wave-001")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create migration wave" }));
+    expect(await screen.findByText("Wave wave-001 staged")).toBeInTheDocument();
+    expect(screen.getByText("Wave created")).toBeInTheDocument();
+    expect(screen.getByText("Resolve blockers before test migration.")).toBeInTheDocument();
+    expect(screen.getAllByText("5").length).toBeGreaterThan(0);
     expect(screen.getByText("$27,250")).toBeInTheDocument();
     expect(screen.getAllByText("$1,800").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Estimate breakdown" })).toBeInTheDocument();
@@ -482,6 +513,10 @@ describe("App", () => {
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "/discovery-runs/release1-demo/start",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/migration-waves/release1-demo",
       expect.objectContaining({ method: "POST" }),
     );
     expect(fetchMock).toHaveBeenCalledWith(

@@ -329,6 +329,22 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.workflow-facts--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workflow-facts--compact div {
+  background: #f8fafc;
+  border: 1px solid #dce3ec;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.workflow-facts--compact div:last-child {
+  border-bottom: 1px solid #dce3ec;
+  padding-bottom: 8px;
+}
+
 .workflow-actions {
   display: flex;
   flex-wrap: wrap;

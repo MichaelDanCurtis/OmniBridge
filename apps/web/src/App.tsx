@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   approveGate,
+  createMigrationWave,
   deployCollector,
   loadWorkspaceData,
   persistFixtureGraph,
   startDiscoveryRun,
   type GraphIngestStatus,
   type IntakeSnapshot,
+  type MigrationWaveCreation,
   type ProjectWorkflow,
   type WorkspaceData,
 } from "./api";
@@ -116,6 +118,9 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
   const [isRunningDiscovery, setIsRunningDiscovery] = useState(false);
   const [approvalError, setApprovalError] = useState<string | null>(null);
   const [approvingGate, setApprovingGate] = useState<string | null>(null);
+  const [migrationWave, setMigrationWave] = useState<MigrationWaveCreation | null>(null);
+  const [migrationWaveError, setMigrationWaveError] = useState<string | null>(null);
+  const [isCreatingMigrationWave, setIsCreatingMigrationWave] = useState(false);
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       {
@@ -278,6 +283,18 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
     }
   }
 
+  async function handleCreateMigrationWave() {
+    setIsCreatingMigrationWave(true);
+    setMigrationWaveError(null);
+    try {
+      setMigrationWave(await createMigrationWave(selectedScope));
+    } catch {
+      setMigrationWaveError("Migration wave creation failed");
+    } finally {
+      setIsCreatingMigrationWave(false);
+    }
+  }
+
   return (
     <main className="workspace-shell">
       <WorkspaceHeader projectTitle={data.project.name} />
@@ -404,7 +421,9 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
               </div>
             </div>
             <span className="workflow-lock">
-              {canSelectScope
+              {migrationWave
+                ? `Wave ${migrationWave.wave_id} staged`
+                : canSelectScope
                 ? `${selectedScope.length} ${selectedScope.length === 1 ? "VM" : "VMs"} selected for wave-001`
                 : "Locked until estimate approval"}
             </span>
@@ -415,7 +434,7 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
                     <input
                       aria-label={candidate.name}
                       checked={selectedScope.includes(candidate.name)}
-                      disabled={!canSelectScope}
+                      disabled={!canSelectScope || migrationWave !== null}
                       onChange={() => handleToggleScope(candidate.name)}
                       type="checkbox"
                     />
@@ -431,16 +450,57 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
             <div className="workflow-actions">
               <button
                 className="primary-action"
-                disabled={!canSelectScope || selectedScope.length === 0}
+                disabled={
+                  !canSelectScope ||
+                  selectedScope.length === 0 ||
+                  isCreatingMigrationWave ||
+                  migrationWave !== null
+                }
+                onClick={() => void handleCreateMigrationWave()}
                 type="button"
               >
-                Create migration wave
+                {migrationWave
+                  ? "Wave created"
+                  : isCreatingMigrationWave
+                    ? "Creating wave..."
+                    : "Create migration wave"}
               </button>
             </div>
+            {migrationWave ? (
+              <dl className="workflow-facts workflow-facts--compact">
+                <div>
+                  <dt>Backend</dt>
+                  <dd>{migrationWave.execution_backend}</dd>
+                </div>
+                <div>
+                  <dt>Operations</dt>
+                  <dd>{migrationWave.operation_count}</dd>
+                </div>
+                <div>
+                  <dt>Blocked</dt>
+                  <dd>{migrationWave.blocked_count}</dd>
+                </div>
+                <div>
+                  <dt>Next action</dt>
+                  <dd>{migrationWave.next_action}</dd>
+                </div>
+              </dl>
+            ) : null}
+            {migrationWave?.blockers.length ? (
+              <ul className="scope-list">
+                {migrationWave.blockers.map((blocker) => (
+                  <li key={blocker.name}>
+                    <strong>{blocker.name}</strong>
+                    <small>{blocker.message}</small>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </article>
         </div>
         {intakeError ? <p className="error-message">{intakeError}</p> : null}
         {approvalError ? <p className="error-message">{approvalError}</p> : null}
+        {migrationWaveError ? <p className="error-message">{migrationWaveError}</p> : null}
       </section>
 
       <section className="assessment-panel" aria-labelledby="assessment-title">

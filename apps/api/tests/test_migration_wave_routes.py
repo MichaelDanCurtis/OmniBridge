@@ -1,0 +1,106 @@
+from collections.abc import Iterator
+
+import pytest
+from fastapi.testclient import TestClient
+
+from omnibridge_api.intake_state import reset_release1_intake_state
+from omnibridge_api.main import app
+from omnibridge_api.routes import approvals as approvals_routes
+from omnibridge_workflow_engine.models import ApprovalLedger
+
+
+@pytest.fixture(autouse=True)
+def release1_workflow_state() -> Iterator[None]:
+    reset_release1_intake_state()
+    approvals_routes._release1_ledger = ApprovalLedger.seed_release1()
+    yield
+    reset_release1_intake_state()
+    approvals_routes._release1_ledger = ApprovalLedger.seed_release1()
+
+
+def _complete_discovery(client: TestClient) -> None:
+    client.post("/collectors/release1-demo/deploy")
+    client.post("/discovery-runs/release1-demo/start")
+
+
+def _approve_estimate(client: TestClient) -> None:
+    client.post(
+        "/approvals/release1-demo/commercial_estimate_approval/approve",
+        json={
+            "actor": "consultant@example.com",
+            "reason": "Customer approved the estimate.",
+        },
+    )
+
+
+def test_migration_wave_requires_discovery_and_estimate_approval() -> None:
+    client = TestClient(app)
+
+    before_discovery = client.post(
+        "/migration-waves/release1-demo",
+        json={"compute_nodes": ["claims-web-01"]},
+    )
+
+    assert before_discovery.status_code == 409
+    assert before_discovery.json()["detail"] == (
+        "Discovery must complete before a migration wave can be created."
+    )
+
+    _complete_discovery(client)
+    before_approval = client.post(
+        "/migration-waves/release1-demo",
+        json={"compute_nodes": ["claims-web-01"]},
+    )
+
+    assert before_approval.status_code == 409
+    assert before_approval.json()["detail"] == (
+        "Commercial estimate must be approved before creating a migration wave."
+    )
+
+
+def test_create_migration_wave_returns_execution_ready_scope_after_approval() -> None:
+    client = TestClient(app)
+    _complete_discovery(client)
+    _approve_estimate(client)
+
+    response = client.post(
+        "/migration-waves/release1-demo",
+        json={"compute_nodes": ["claims-web-01", "claims-db-01"]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["wave_id"] == "wave-001"
+    assert payload["status"] == "ready_for_test_migration"
+    assert payload["selected_compute_nodes"] == ["claims-web-01", "claims-db-01"]
+    assert payload["execution_backend"] == "azure-migrate"
+    assert payload["operation_count"] == 6
+    assert payload["approval_gates"] == [
+        "test_migration_approval",
+        "source_shutdown_approval",
+        "cutover_approval",
+    ]
+    assert payload["ready_count"] == 1
+    assert payload["blocked_count"] == 1
+    assert payload["blockers"] == [
+        {
+            "name": "claims-db-01",
+            "readiness": "Blocked",
+            "message": "claims-db-01 has one or more VMware snapshots.",
+        }
+    ]
+    assert payload["next_action"] == "Resolve blockers before test migration."
+
+
+def test_create_migration_wave_rejects_unknown_compute_nodes() -> None:
+    client = TestClient(app)
+    _complete_discovery(client)
+    _approve_estimate(client)
+
+    response = client.post(
+        "/migration-waves/release1-demo",
+        json={"compute_nodes": ["not-a-real-vm"]},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Unknown compute nodes: not-a-real-vm"

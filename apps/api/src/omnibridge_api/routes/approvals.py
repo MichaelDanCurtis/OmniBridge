@@ -25,6 +25,13 @@ def _release1_snapshot() -> ProjectWorkflowSnapshot:
     )
 
 
+def is_release1_gate_approved(gate: str) -> bool:
+    return any(
+        record.gate == gate and record.status == "approved"
+        for record in _release1_ledger.records
+    )
+
+
 @router.get("/release1-demo")
 def release1_demo_approvals() -> dict[str, object]:
     return _release1_snapshot().model_dump(mode="json")

@@ -19,6 +19,7 @@ export default defineConfig({
       "/graph": apiTarget,
       "/health": apiTarget,
       "/imports": apiTarget,
+      "/migration-waves": apiTarget,
       "/validation": apiTarget,
       "/workspace": apiTarget,
     },

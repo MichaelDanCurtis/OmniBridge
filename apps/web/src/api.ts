@@ -162,6 +162,23 @@ export type ProjectWorkflow = {
   pending_approval_count: number;
 };
 
+export type MigrationWaveCreation = {
+  wave_id: string;
+  status: string;
+  selected_compute_nodes: string[];
+  execution_backend: string;
+  operation_count: number;
+  approval_gates: string[];
+  ready_count: number;
+  blocked_count: number;
+  blockers: Array<{
+    name: string;
+    readiness: string;
+    message: string;
+  }>;
+  next_action: string;
+};
+
 export type ExecutionOperation = {
   name: string;
   execution_mode: string;
@@ -304,6 +321,26 @@ export async function startDiscoveryRun(): Promise<IntakeSnapshot> {
   }
 
   return response.json() as Promise<IntakeSnapshot>;
+}
+
+export async function createMigrationWave(
+  computeNodes: string[],
+): Promise<MigrationWaveCreation> {
+  const response = await fetch("/migration-waves/release1-demo", {
+    body: JSON.stringify({
+      compute_nodes: computeNodes,
+    }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Migration wave creation failed: ${response.status}`);
+  }
+
+  return response.json() as Promise<MigrationWaveCreation>;
 }
 
 export async function approveGate(gate: string): Promise<ApprovalRecord> {
