@@ -17,6 +17,8 @@ type SummaryCard = {
   tone: "neutral" | "critical" | "warning";
 };
 
+type IngressState = "not_deployed" | "connected" | "collected";
+
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
   maximumFractionDigits: 0,
@@ -69,9 +71,7 @@ function WorkspaceHeader({ projectTitle = FALLBACK_PROJECT_TITLE }: { projectTit
         <h1 id="workspace-title">OmniBridge Consultant Workspace</h1>
         <p className="workspace-subtitle">{projectTitle}</p>
       </div>
-      <button className="primary-action" type="button">
-        Approve Estimate
-      </button>
+      <span className="status-pill">Migration intake</span>
     </section>
   );
 }
@@ -102,6 +102,10 @@ function WorkspaceError() {
 }
 
 function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
+  const [ingressState, setIngressState] = useState<IngressState>("not_deployed");
+  const [selectedScope, setSelectedScope] = useState<string[]>(
+    data.target_design.vm_targets.map((target) => target.name),
+  );
   const [graphIngest, setGraphIngest] = useState<GraphIngestStatus>(data.graph_ingest);
   const [workflow, setWorkflow] = useState<ProjectWorkflow>(data.workflow);
   const [graphPersistError, setGraphPersistError] = useState<string | null>(null);
@@ -163,11 +167,41 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
   );
   const topologyEdges = data.topology.edges.slice(0, 8);
   const validationChecks = data.validation_evidence.checks.slice(0, 8);
+  const commercialEstimateApproval = workflow.approvals.find(
+    (approval) => approval.gate === "commercial_estimate_approval",
+  );
+  const isEstimateApproved = commercialEstimateApproval?.status === "approved";
+  const canReviewEstimate = ingressState === "collected";
+  const canSelectScope = canReviewEstimate && isEstimateApproved;
+  const migrationCandidates = data.target_design.vm_targets.map((target) => {
+    const inventory = data.inventory.vms.find((vm) => vm.name === target.name);
+    return {
+      ...target,
+      readiness: inventory?.readiness ?? "Ready",
+      source_network: inventory?.source_network ?? "unmapped",
+    };
+  });
   const graphStatusLabel = graphIngest.persisted
     ? "Persisted to Neo4j"
     : graphIngest.neo4j_configured
       ? "Ready to persist"
       : "Neo4j not configured";
+
+  function handleDeployCollector() {
+    setIngressState("connected");
+  }
+
+  function handleRunDataCollection() {
+    setIngressState("collected");
+  }
+
+  function handleToggleScope(name: string) {
+    setSelectedScope((current) =>
+      current.includes(name)
+        ? current.filter((candidateName) => candidateName !== name)
+        : [...current, name],
+    );
+  }
 
   async function handlePersistGraph() {
     setIsPersistingGraph(true);
@@ -211,6 +245,164 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
   return (
     <main className="workspace-shell">
       <WorkspaceHeader projectTitle={data.project.name} />
+
+      <section className="workflow-panel" aria-label="Migration workflow">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Operator workflow</p>
+            <h2>Migration intake</h2>
+          </div>
+          <span className="count-badge">3 stages</span>
+        </div>
+
+        <div className="workflow-grid">
+          <article className="workflow-card workflow-card--active">
+            <div className="workflow-card-heading">
+              <span className="step-marker">1</span>
+              <div>
+                <p className="eyebrow">Source environment</p>
+                <h2>VMware ingress</h2>
+              </div>
+            </div>
+            <dl className="workflow-facts">
+              <div>
+                <dt>vCenter</dt>
+                <dd>{data.project.source.vcenter}</dd>
+              </div>
+              <div>
+                <dt>Collector</dt>
+                <dd>
+                  {ingressState === "not_deployed"
+                    ? "Collector not deployed"
+                    : ingressState === "connected"
+                      ? `Connected to ${data.project.source.vcenter}`
+                      : "Discovery complete"}
+                </dd>
+              </div>
+              <div>
+                <dt>Collection</dt>
+                <dd>
+                  {ingressState === "collected"
+                    ? `${data.summary.compute_nodes} VMs discovered`
+                    : `${data.summary.compute_nodes} VMs available in fixture`}
+                </dd>
+              </div>
+            </dl>
+            <div className="workflow-actions">
+              <button
+                className="primary-action"
+                disabled={ingressState !== "not_deployed"}
+                onClick={handleDeployCollector}
+                type="button"
+              >
+                {ingressState === "not_deployed" ? "Deploy collector" : "Collector deployed"}
+              </button>
+              <button
+                className="secondary-action"
+                disabled={ingressState === "not_deployed" || ingressState === "collected"}
+                onClick={handleRunDataCollection}
+                type="button"
+              >
+                {ingressState === "collected" ? "Collection complete" : "Run data collection"}
+              </button>
+            </div>
+          </article>
+
+          <article className={`workflow-card ${canReviewEstimate ? "workflow-card--active" : ""}`}>
+            <div className="workflow-card-heading">
+              <span className="step-marker">2</span>
+              <div>
+                <p className="eyebrow">Commercial gate</p>
+                <h2>Cost estimate</h2>
+              </div>
+            </div>
+            <span className="workflow-lock">
+              {canReviewEstimate
+                ? isEstimateApproved
+                  ? "Estimate approved"
+                  : "Ready for approval"
+                : "Locked until discovery"}
+            </span>
+            <dl className="workflow-facts">
+              <div>
+                <dt>Project fee</dt>
+                <dd>
+                  {canReviewEstimate
+                    ? `${formatCurrency(data.estimate.base_project_fee_usd)} project fee`
+                    : "Pending discovery"}
+                </dd>
+              </div>
+              <div>
+                <dt>Agent usage</dt>
+                <dd>
+                  {canReviewEstimate
+                    ? formatCurrency(data.estimate.estimated_agent_usage_usd)
+                    : "Pending discovery"}
+                </dd>
+              </div>
+              <div>
+                <dt>Complexity</dt>
+                <dd>{canReviewEstimate ? data.estimate.complexity_band : "Pending discovery"}</dd>
+              </div>
+            </dl>
+            <div className="workflow-actions">
+              <button
+                className="primary-action"
+                disabled={!canReviewEstimate || isEstimateApproved || approvingGate !== null}
+                onClick={() => void handleApproveGate("commercial_estimate_approval")}
+                type="button"
+              >
+                {isEstimateApproved ? "Approved" : "Approve estimate package"}
+              </button>
+            </div>
+          </article>
+
+          <article className={`workflow-card ${canSelectScope ? "workflow-card--active" : ""}`}>
+            <div className="workflow-card-heading">
+              <span className="step-marker">3</span>
+              <div>
+                <p className="eyebrow">Migration factory</p>
+                <h2>Migration scope</h2>
+              </div>
+            </div>
+            <span className="workflow-lock">
+              {canSelectScope
+                ? `${selectedScope.length} ${selectedScope.length === 1 ? "VM" : "VMs"} selected for wave-001`
+                : "Locked until estimate approval"}
+            </span>
+            <ul className="scope-list">
+              {migrationCandidates.map((candidate) => (
+                <li key={candidate.name}>
+                  <label>
+                    <input
+                      aria-label={candidate.name}
+                      checked={selectedScope.includes(candidate.name)}
+                      disabled={!canSelectScope}
+                      onChange={() => handleToggleScope(candidate.name)}
+                      type="checkbox"
+                    />
+                    <span>{candidate.name}</span>
+                  </label>
+                  <small>
+                    {candidate.source_network} -&gt; {candidate.subnet} / {candidate.vm_size} /{" "}
+                    {candidate.readiness}
+                  </small>
+                </li>
+              ))}
+            </ul>
+            <div className="workflow-actions">
+              <button
+                className="primary-action"
+                disabled={!canSelectScope || selectedScope.length === 0}
+                type="button"
+              >
+                Create migration wave
+              </button>
+            </div>
+          </article>
+        </div>
+        {approvalError ? <p className="error-message">{approvalError}</p> : null}
+      </section>
 
       <section className="assessment-panel" aria-labelledby="assessment-title">
         <div className="panel-heading">

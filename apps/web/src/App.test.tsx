@@ -343,7 +343,26 @@ describe("App", () => {
     expect(
       screen.getByRole("heading", { name: "OmniBridge Consultant Workspace" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Approve Estimate" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "VMware ingress" })).toBeInTheDocument();
+    expect(screen.getByText("Collector not deployed")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Cost estimate" })).toBeInTheDocument();
+    expect(screen.getByText("Locked until discovery")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Migration scope" })).toBeInTheDocument();
+    expect(screen.getByText("Locked until estimate approval")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Deploy collector" }));
+    expect(screen.getByText("Connected to vcsa-prod-01")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Run data collection" }));
+    expect(screen.getByText("Discovery complete")).toBeInTheDocument();
+    expect(screen.getByText("3 VMs discovered")).toBeInTheDocument();
+    expect(screen.getByText("$27,250 project fee")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Approve estimate package" }));
+    expect(await screen.findByText("5 pending")).toBeInTheDocument();
+    expect(screen.getByText("Estimate approved")).toBeInTheDocument();
+    expect(screen.getByText("1 VM selected for wave-001")).toBeInTheDocument();
+    const scopeCheckbox = screen.getByRole("checkbox", { name: "claims-db-01" });
+    expect(scopeCheckbox).toBeChecked();
+    fireEvent.click(scopeCheckbox);
+    expect(screen.getByText("0 VMs selected for wave-001")).toBeInTheDocument();
     expect(screen.getByText("$27,250")).toBeInTheDocument();
     expect(screen.getAllByText("$1,800").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Estimate breakdown" })).toBeInTheDocument();
@@ -353,10 +372,7 @@ describe("App", () => {
     expect(screen.getByText("$0.20 / 1k tokens")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Approval ledger" })).toBeInTheDocument();
     expect(screen.getByText("BLUEPRINT_GENERATED")).toBeInTheDocument();
-    expect(screen.getByText("6 pending")).toBeInTheDocument();
     expect(screen.getByText("commercial_estimate_approval")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Approve commercial_estimate_approval" }));
-    expect(await screen.findByText("5 pending")).toBeInTheDocument();
     expect(screen.getByText("approved")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Azure Migrate execution plan" })).toBeInTheDocument();
     expect(screen.getAllByText("dry_run").length).toBeGreaterThan(0);
