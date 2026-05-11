@@ -12,6 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from omnibridge_collector.cli import main
 from omnibridge_collector.client import (
     DEFAULT_HEARTBEAT_PATH_TEMPLATE,
+    DEFAULT_JOB_CLAIM_PATH_TEMPLATE,
+    DEFAULT_JOB_COMPLETE_PATH_TEMPLATE,
     DEFAULT_REGISTER_PATH,
     CollectorClient,
 )
@@ -108,6 +110,74 @@ class CollectorClientTests(unittest.TestCase):
             _RequestRecorder.requests[0]["body"],
         )
 
+    def test_claim_job_posts_api_contract_payload(self):
+        client = CollectorClient(api_url=self.api_url)
+
+        result = client.claim_job(
+            collector_id="collector-release1-demo",
+            registration_token="token-abc",
+            version="0.1.0",
+            capabilities=["fixture_discovery", "heartbeat"],
+        )
+
+        self.assertEqual(200, result.status_code)
+        self.assertEqual(
+            DEFAULT_JOB_CLAIM_PATH_TEMPLATE.format(collector_id="collector-release1-demo"),
+            _RequestRecorder.requests[0]["path"],
+        )
+        self.assertEqual(
+            {
+                "capabilities": ["fixture_discovery", "heartbeat"],
+                "registration_token": "token-abc",
+                "version": "0.1.0",
+            },
+            _RequestRecorder.requests[0]["body"],
+        )
+
+    def test_complete_job_posts_api_contract_payload(self):
+        client = CollectorClient(api_url=self.api_url)
+
+        result = client.complete_job(
+            collector_id="collector-release1-demo",
+            job_id="discovery-release1-demo-001",
+            registration_token="token-abc",
+            version="0.1.0",
+            capabilities=["fixture_discovery", "heartbeat"],
+            result={
+                "source": "fixture",
+                "compute_nodes": 3,
+                "network_segments": 3,
+                "graph_nodes": 12,
+                "graph_edges": 13,
+                "estimate_ready": True,
+            },
+        )
+
+        self.assertEqual(200, result.status_code)
+        self.assertEqual(
+            DEFAULT_JOB_COMPLETE_PATH_TEMPLATE.format(
+                collector_id="collector-release1-demo",
+                job_id="discovery-release1-demo-001",
+            ),
+            _RequestRecorder.requests[0]["path"],
+        )
+        self.assertEqual(
+            {
+                "capabilities": ["fixture_discovery", "heartbeat"],
+                "registration_token": "token-abc",
+                "version": "0.1.0",
+                "result": {
+                    "source": "fixture",
+                    "compute_nodes": 3,
+                    "network_segments": 3,
+                    "graph_nodes": 12,
+                    "graph_edges": 13,
+                    "estimate_ready": True,
+                },
+            },
+            _RequestRecorder.requests[0]["body"],
+        )
+
     def test_http_error_returns_response_status_and_body(self):
         _RequestRecorder.next_status = 404
         _RequestRecorder.next_body = {"detail": "not found"}
@@ -167,6 +237,99 @@ class CollectorClientTests(unittest.TestCase):
         output = json.loads(stdout.getvalue())
         self.assertEqual(200, output["status_code"])
         self.assertTrue(output["ok"])
+
+    def test_cli_run_once_claims_and_completes_fixture_job(self):
+        _RequestRecorder.next_body = {
+            "collector": {"collector_id": "collector-123", "status": "online"},
+            "job": {
+                "job_id": "discovery-release1-demo-001",
+                "job_type": "discovery",
+                "status": "running",
+                "parameters": {"source": "fixture"},
+            },
+        }
+        stdout = StringIO()
+
+        exit_code = main(
+            [
+                "run-once",
+                "--api-url",
+                self.api_url,
+                "--collector-id",
+                "collector-release1-demo",
+                "--registration-token",
+                "token-abc",
+            ],
+            stdout=stdout,
+        )
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual(2, len(_RequestRecorder.requests))
+        self.assertEqual(
+            DEFAULT_JOB_CLAIM_PATH_TEMPLATE.format(collector_id="collector-release1-demo"),
+            _RequestRecorder.requests[0]["path"],
+        )
+        self.assertEqual(
+            DEFAULT_JOB_COMPLETE_PATH_TEMPLATE.format(
+                collector_id="collector-release1-demo",
+                job_id="discovery-release1-demo-001",
+            ),
+            _RequestRecorder.requests[1]["path"],
+        )
+        self.assertEqual("fixture", _RequestRecorder.requests[1]["body"]["result"]["source"])
+        self.assertTrue(json.loads(stdout.getvalue())["ok"])
+
+    def test_cli_run_once_with_no_job_makes_only_claim_request(self):
+        _RequestRecorder.next_body = {
+            "collector": {"collector_id": "collector-123", "status": "online"},
+            "job": None,
+        }
+        stdout = StringIO()
+
+        exit_code = main(
+            [
+                "run-once",
+                "--api-url",
+                self.api_url,
+                "--collector-id",
+                "collector-release1-demo",
+                "--registration-token",
+                "token-abc",
+            ],
+            stdout=stdout,
+        )
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual(1, len(_RequestRecorder.requests))
+        self.assertEqual(
+            DEFAULT_JOB_CLAIM_PATH_TEMPLATE.format(collector_id="collector-release1-demo"),
+            _RequestRecorder.requests[0]["path"],
+        )
+        self.assertTrue(json.loads(stdout.getvalue())["ok"])
+
+    def test_cli_run_once_claim_error_does_not_complete(self):
+        _RequestRecorder.next_status = 401
+        _RequestRecorder.next_body = {"detail": "Invalid collector registration token."}
+        stdout = StringIO()
+
+        exit_code = main(
+            [
+                "run-once",
+                "--api-url",
+                self.api_url,
+                "--collector-id",
+                "collector-release1-demo",
+                "--registration-token",
+                "wrong-token",
+            ],
+            stdout=stdout,
+        )
+
+        self.assertEqual(1, exit_code)
+        self.assertEqual(1, len(_RequestRecorder.requests))
+        output = json.loads(stdout.getvalue())
+        self.assertEqual(401, output["status_code"])
+        self.assertFalse(output["ok"])
 
 
 if __name__ == "__main__":

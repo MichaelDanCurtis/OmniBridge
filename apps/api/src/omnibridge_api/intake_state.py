@@ -1,5 +1,4 @@
 from enum import StrEnum
-from pathlib import Path
 import secrets
 
 from pydantic import BaseModel
@@ -8,18 +7,15 @@ from omnibridge_api.control_plane_store import (
     CollectorNotFoundError,
     ControlPlaneStore,
     InvalidRegistrationTokenError,
+    RunNotFoundError,
+    RunTransitionError,
     StoredCollector,
+    StoredRun,
     default_store,
 )
 from omnibridge_api.settings import settings
-from omnibridge_vmware_to_azure.fixture_loader import load_fixture
-from omnibridge_vmware_to_azure.mapper import map_fixture_to_graph
 
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
-_RELEASE1_FIXTURE_PATH = (
-    _REPO_ROOT / "corridors" / "vmware-to-azure" / "fixtures" / "acme-small-estate.json"
-)
 _RELEASE1_PROJECT_ID = "project-acme-vmware-azure"
 _RELEASE1_COLLECTOR_ID = "collector-release1-demo"
 _RELEASE1_VCENTER = "vcsa-prod-01"
@@ -35,7 +31,10 @@ class CollectorStatus(StrEnum):
 
 class DiscoveryRunStatus(StrEnum):
     NOT_STARTED = "not_started"
+    QUEUED = "queued"
+    RUNNING = "running"
     COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class CollectorSnapshot(BaseModel):
@@ -88,6 +87,23 @@ class CollectorHeartbeatRequest(BaseModel):
     registration_token: str
     version: str
     capabilities: list[str]
+
+
+class CollectorJob(BaseModel):
+    job_id: str
+    job_type: str
+    status: str
+    parameters: dict[str, object]
+
+
+class CollectorJobClaimResponse(BaseModel):
+    project_id: str
+    collector: CollectorSnapshot
+    job: CollectorJob | None
+
+
+class CollectorJobCompletionRequest(CollectorHeartbeatRequest):
+    result: dict[str, object]
 
 
 class CollectorNotConnectedError(RuntimeError):
@@ -168,25 +184,77 @@ def start_release1_discovery_run() -> IntakeSnapshot:
     if collector is None or collector.status != CollectorStatus.ONLINE:
         raise CollectorNotConnectedError("Collector must be online before discovery can run.")
 
-    fixture = load_fixture(_RELEASE1_FIXTURE_PATH)
-    graph = map_fixture_to_graph(fixture)
-    result = {
-        "source": "fixture",
-        "compute_nodes": len(fixture.get("vms", [])),
-        "network_segments": len(fixture.get("networks", [])),
-        "graph_nodes": len(graph.nodes),
-        "graph_edges": len(graph.edges),
-        "estimate_ready": True,
-    }
     store.record_run(
         run_id="discovery-release1-demo-001",
         project_id=_RELEASE1_PROJECT_ID,
         run_type="discovery",
-        status="completed",
-        collector_id=collector.collector_id,
-        result=result,
+        status=DiscoveryRunStatus.QUEUED,
+        collector_id=None,
+        result={
+            "source": "fixture",
+            "estimate_ready": False,
+        },
     )
     return _snapshot_from_store(store, collector=collector)
+
+
+def claim_release1_collector_job(
+    collector_id: str,
+    request: CollectorHeartbeatRequest,
+) -> CollectorJobClaimResponse:
+    store = default_store()
+    run = store.claim_next_run(
+        project_id=_RELEASE1_PROJECT_ID,
+        collector_id=collector_id,
+        registration_token=request.registration_token,
+        version=request.version,
+        capabilities=request.capabilities,
+    )
+    collector = store.get_collector(collector_id)
+    if collector is None:
+        raise CollectorNotFoundError(collector_id)
+
+    return CollectorJobClaimResponse(
+        project_id=_RELEASE1_PROJECT_ID,
+        collector=_collector_snapshot(collector),
+        job=_job_from_run(run) if run is not None else None,
+    )
+
+
+def complete_release1_collector_job(
+    collector_id: str,
+    job_id: str,
+    request: CollectorJobCompletionRequest,
+) -> IntakeSnapshot:
+    store = default_store()
+    collector = store.get_collector(collector_id)
+    if collector is None:
+        raise CollectorNotFoundError(collector_id)
+
+    store.complete_run(
+        run_id=job_id,
+        collector_id=collector_id,
+        registration_token=request.registration_token,
+        version=request.version,
+        capabilities=request.capabilities,
+        result=dict(request.result),
+    )
+    collector = store.get_collector(collector_id)
+    if collector is None:
+        raise CollectorNotFoundError(collector_id)
+
+    return _snapshot_from_store(store, collector=collector)
+
+
+def release1_fixture_discovery_result() -> dict[str, object]:
+    return {
+        "source": "fixture",
+        "compute_nodes": 3,
+        "network_segments": 3,
+        "graph_nodes": 12,
+        "graph_edges": 13,
+        "estimate_ready": True,
+    }
 
 
 def _snapshot_from_store(
@@ -205,17 +273,17 @@ def _snapshot_from_store(
         ),
         discovery=DiscoveryRunSnapshot(
             run_id=discovery_run.run_id if discovery_run else None,
-            status=(
-                DiscoveryRunStatus.COMPLETED
-                if discovery_run and discovery_run.status == "completed"
-                else DiscoveryRunStatus.NOT_STARTED
-            ),
+            status=_discovery_status(discovery_run),
             source=str(discovery_result.get("source", "fixture")),
-            compute_nodes=int(discovery_result.get("compute_nodes", 0)),
-            network_segments=int(discovery_result.get("network_segments", 0)),
-            graph_nodes=int(discovery_result.get("graph_nodes", 0)),
-            graph_edges=int(discovery_result.get("graph_edges", 0)),
-            estimate_ready=bool(discovery_result.get("estimate_ready", False)),
+            compute_nodes=_completed_int(discovery_run, discovery_result, "compute_nodes"),
+            network_segments=_completed_int(discovery_run, discovery_result, "network_segments"),
+            graph_nodes=_completed_int(discovery_run, discovery_result, "graph_nodes"),
+            graph_edges=_completed_int(discovery_run, discovery_result, "graph_edges"),
+            estimate_ready=(
+                discovery_run is not None
+                and discovery_run.status == DiscoveryRunStatus.COMPLETED
+                and bool(discovery_result.get("estimate_ready", False))
+            ),
         ),
     )
 
@@ -240,17 +308,44 @@ def _default_collector_snapshot() -> CollectorSnapshot:
     )
 
 
+def _job_from_run(run: StoredRun) -> CollectorJob:
+    return CollectorJob(
+        job_id=run.run_id,
+        job_type=run.run_type,
+        status=run.status,
+        parameters={"source": str(run.result.get("source", "fixture"))},
+    )
+
+
+def _discovery_status(run: StoredRun | None) -> DiscoveryRunStatus:
+    if run is None:
+        return DiscoveryRunStatus.NOT_STARTED
+    return DiscoveryRunStatus(run.status)
+
+
+def _completed_int(run: StoredRun | None, result: dict[str, object], key: str) -> int:
+    if run is None or run.status != DiscoveryRunStatus.COMPLETED:
+        return 0
+    return int(result.get(key, 0))
+
+
 __all__ = [
     "CollectorAlreadyOnlineError",
     "CollectorHeartbeatRequest",
+    "CollectorJobCompletionRequest",
     "CollectorNotConnectedError",
     "CollectorRegistrationRequest",
     "InvalidRegistrationTokenError",
     "CollectorNotFoundError",
+    "RunNotFoundError",
+    "RunTransitionError",
     "bootstrap_release1_collector",
+    "claim_release1_collector_job",
+    "complete_release1_collector_job",
     "get_release1_intake_snapshot",
     "record_release1_collector_heartbeat",
     "register_release1_collector",
+    "release1_fixture_discovery_result",
     "reset_release1_intake_state",
     "start_release1_discovery_run",
 ]

@@ -190,7 +190,13 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
     (approval) => approval.gate === "commercial_estimate_approval",
   );
   const isEstimateApproved = commercialEstimateApproval?.status === "approved";
-  const canReviewEstimate = intake.discovery.estimate_ready;
+  const isDiscoveryComplete =
+    intake.discovery.status === "completed" && intake.discovery.estimate_ready;
+  const isDiscoveryQueued = intake.discovery.status === "queued";
+  const isDiscoveryRunning = intake.discovery.status === "running";
+  const isDiscoveryFailed = intake.discovery.status === "failed";
+  const isDiscoveryActive = isDiscoveryQueued || isDiscoveryRunning || isRunningDiscovery;
+  const canReviewEstimate = isDiscoveryComplete;
   const canSelectScope = canReviewEstimate && isEstimateApproved;
   const migrationCandidates = data.target_design.vm_targets.map((target) => {
     const inventory = data.inventory.vms.find((vm) => vm.name === target.name);
@@ -209,24 +215,42 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
   const canBootstrapCollector =
     intake.collector.status !== "online" && !intake.discovery.estimate_ready;
   const collectorLabel =
-    intake.discovery.status === "completed"
-      ? "Discovery complete"
-      : intake.collector.status === "online"
-        ? `Online at ${intake.collector.last_heartbeat_at ?? "heartbeat pending"}`
-        : intake.collector.status === "pending_registration"
-          ? "Waiting for collector registration"
-          : intake.collector.status === "offline"
-            ? "Collector offline"
-            : intake.collector.status === "revoked"
-              ? "Collector revoked"
-              : "Collector not deployed";
+    intake.collector.status === "online"
+      ? `Online at ${intake.collector.last_heartbeat_at ?? "heartbeat pending"}`
+      : intake.collector.status === "pending_registration"
+        ? "Waiting for collector registration"
+        : intake.collector.status === "offline"
+          ? "Collector offline"
+          : intake.collector.status === "revoked"
+            ? "Collector revoked"
+            : "Collector not deployed";
   const collectionLabel = intake.discovery.estimate_ready
-    ? `${intake.discovery.compute_nodes} VMs loaded from ${intake.discovery.source}`
+    ? `${intake.discovery.compute_nodes} VMs discovered from ${intake.discovery.source}`
+    : isDiscoveryQueued
+      ? "Discovery queued for collector"
+      : isDiscoveryRunning
+        ? "Collector running discovery"
+        : isDiscoveryFailed
+          ? "Discovery failed"
     : intake.collector.status === "online"
       ? isFixtureDiscovery
-        ? "Ready to load fixture"
+        ? "Ready to queue discovery"
         : "Ready to collect"
       : "Awaiting collector";
+  const lockedResultsStatus = isDiscoveryQueued
+    ? "Discovery queued"
+    : isDiscoveryRunning
+      ? "Discovery running"
+      : isDiscoveryFailed
+        ? "Discovery failed"
+        : "Pending discovery";
+  const lockedResultsCopy = isDiscoveryQueued
+    ? "Discovery has been queued. Keep the collector online, then refresh status after it claims the job."
+    : isDiscoveryRunning
+      ? "The collector is running discovery. Refresh status after the job completes to unlock the assessment workspace."
+      : isDiscoveryFailed
+        ? "Discovery failed. Review collector logs, then queue discovery again."
+        : "Estimate, inventory, topology, target design, generated artifacts, and migration wave controls unlock after the collector completes discovery.";
 
   useEffect(() => {
     let isMounted = true;
@@ -290,7 +314,16 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
     setIsRefreshingCollector(true);
     setIntakeError(null);
     try {
-      setIntake(await loadLatestDiscoveryRun());
+      const snapshot = await loadLatestDiscoveryRun();
+      setIntake(snapshot);
+      if (snapshot.discovery.status === "completed") {
+        setGraphIngest((current) => ({
+          ...current,
+          edge_count: snapshot.discovery.graph_edges,
+          node_count: snapshot.discovery.graph_nodes,
+          source: snapshot.discovery.source,
+        }));
+      }
     } catch {
       setIntakeError("Collector status refresh failed");
     } finally {
@@ -304,12 +337,14 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
     try {
       const snapshot = await startDiscoveryRun();
       setIntake(snapshot);
-      setGraphIngest((current) => ({
-        ...current,
-        edge_count: snapshot.discovery.graph_edges,
-        node_count: snapshot.discovery.graph_nodes,
-        source: snapshot.discovery.source,
-      }));
+      if (snapshot.discovery.status === "completed") {
+        setGraphIngest((current) => ({
+          ...current,
+          edge_count: snapshot.discovery.graph_edges,
+          node_count: snapshot.discovery.graph_nodes,
+          source: snapshot.discovery.source,
+        }));
+      }
     } catch {
       setIntakeError("Discovery run failed");
     } finally {
@@ -447,18 +482,24 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
                 className="secondary-action"
                 disabled={
                   intake.collector.status !== "online" ||
-                  intake.discovery.estimate_ready ||
-                  isRunningDiscovery
+                  isDiscoveryActive ||
+                  (intake.discovery.estimate_ready && !isDiscoveryFailed)
                 }
                 onClick={() => void handleRunDataCollection()}
                 type="button"
               >
-                {intake.discovery.estimate_ready
-                  ? "Fixture loaded"
+                {isDiscoveryComplete
+                  ? "Discovery complete"
+                  : isDiscoveryQueued
+                    ? "Discovery queued"
+                    : isDiscoveryRunning
+                      ? "Discovery running"
                   : isRunningDiscovery
-                    ? "Loading fixture..."
+                    ? "Queueing discovery..."
+                    : isDiscoveryFailed
+                      ? "Queue discovery"
                     : isFixtureDiscovery
-                      ? "Load fixture discovery"
+                      ? "Queue discovery"
                       : "Run data collection"}
               </button>
               <button
@@ -467,7 +508,7 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
                 onClick={() => void handleRefreshCollector()}
                 type="button"
               >
-                {isRefreshingCollector ? "Refreshing..." : "Refresh collector"}
+                {isRefreshingCollector ? "Refreshing..." : "Refresh status"}
               </button>
             </div>
             {collectorBootstrap ? (
@@ -1147,11 +1188,10 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
               <p className="eyebrow">Awaiting collector output</p>
               <h2 id="locked-results-title">Discovery results locked</h2>
             </div>
-            <span className="status-pill">Pending discovery</span>
+            <span className="status-pill">{lockedResultsStatus}</span>
           </div>
           <p className="analysis-summary">
-            Estimate, inventory, topology, target design, generated artifacts, and migration wave
-            controls unlock after the collector is online and fixture discovery is loaded.
+            {lockedResultsCopy}
           </p>
         </section>
       )}

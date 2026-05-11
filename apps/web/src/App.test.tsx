@@ -13,6 +13,7 @@ describe("App", () => {
   });
 
   it("renders the consultant workspace from Release 1 API data", async () => {
+    let latestDiscoveryRequestCount = 0;
     const workspaceResponse = {
       project: {
         name: "ACME VMware-to-Azure Assessment",
@@ -363,6 +364,31 @@ describe("App", () => {
       }
 
       if (path === "/discovery-runs/release1-demo/latest" && init === undefined) {
+        latestDiscoveryRequestCount += 1;
+        const discovery =
+          latestDiscoveryRequestCount === 1
+            ? workspaceResponse.intake.discovery
+            : latestDiscoveryRequestCount === 2
+              ? {
+                  run_id: "discovery-release1-demo-001",
+                  status: "running",
+                  source: "fixture",
+                  compute_nodes: 0,
+                  network_segments: 0,
+                  graph_nodes: 0,
+                  graph_edges: 0,
+                  estimate_ready: false,
+                }
+              : {
+                  run_id: "discovery-release1-demo-001",
+                  status: "completed",
+                  source: "fixture",
+                  compute_nodes: 3,
+                  network_segments: 3,
+                  graph_nodes: 12,
+                  graph_edges: 13,
+                  estimate_ready: true,
+                };
         return Promise.resolve(
           new Response(
             JSON.stringify({
@@ -374,6 +400,7 @@ describe("App", () => {
                 version: "0.1.0",
                 capabilities: ["fixture_discovery", "heartbeat"],
               },
+              discovery,
             }),
             { status: 200 },
           ),
@@ -394,13 +421,13 @@ describe("App", () => {
               },
               discovery: {
                 run_id: "discovery-release1-demo-001",
-                status: "completed",
+                status: "queued",
                 source: "fixture",
-                compute_nodes: 3,
-                network_segments: 3,
-                graph_nodes: 12,
-                graph_edges: 13,
-                estimate_ready: true,
+                compute_nodes: 0,
+                network_segments: 0,
+                graph_nodes: 0,
+                graph_edges: 0,
+                estimate_ready: false,
               },
             }),
             { status: 200 },
@@ -513,13 +540,18 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate bootstrap" }));
     expect(await screen.findByText("Waiting for collector registration")).toBeInTheDocument();
     expect(screen.getByText("omnibridge-collector register --api-url http://127.0.0.1:8001 --collector-id collector-release1-demo --registration-token token-abc")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Refresh collector" }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
     expect(await screen.findByText("Online at 2026-05-11T12:00:00Z")).toBeInTheDocument();
-    expect(screen.getByText("Ready to load fixture")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Load fixture discovery" }));
-    expect(await screen.findByText("Discovery complete")).toBeInTheDocument();
+    expect(screen.getByText("Ready to queue discovery")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Queue discovery" }));
+    expect(await screen.findByText("Discovery queued for collector")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Discovery results locked" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
+    expect(await screen.findByText("Collector running discovery")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Discovery results locked" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
+    expect(await screen.findByText("3 VMs discovered from fixture")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Claims Portal" })).toBeInTheDocument();
-    expect(screen.getByText("3 VMs loaded from fixture")).toBeInTheDocument();
     expect(screen.getByText("$27,250 project fee")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Approve estimate package" }));
     expect(await screen.findByText("5 pending")).toBeInTheDocument();

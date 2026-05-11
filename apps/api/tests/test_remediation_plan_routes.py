@@ -16,16 +16,41 @@ def release1_intake_state() -> Iterator[None]:
 
 def _complete_discovery(client: TestClient) -> None:
     bootstrap = client.post("/collectors/release1-demo/bootstrap").json()
+    registration_token = bootstrap["registration"]["registration_token"]
     client.post(
         "/collectors/release1-demo/register",
         json={
             "collector_id": "collector-release1-demo",
-            "registration_token": bootstrap["registration"]["registration_token"],
+            "registration_token": registration_token,
             "version": "0.1.0",
             "capabilities": ["fixture_discovery", "heartbeat"],
         },
     )
     client.post("/discovery-runs/release1-demo/start")
+    client.post(
+        "/collectors/collector-release1-demo/jobs/claim",
+        json={
+            "registration_token": registration_token,
+            "version": "0.1.0",
+            "capabilities": ["fixture_discovery", "heartbeat"],
+        },
+    )
+    client.post(
+        "/collectors/collector-release1-demo/jobs/discovery-release1-demo-001/complete",
+        json={
+            "registration_token": registration_token,
+            "version": "0.1.0",
+            "capabilities": ["fixture_discovery", "heartbeat"],
+            "result": {
+                "source": "fixture",
+                "compute_nodes": 3,
+                "network_segments": 3,
+                "graph_nodes": 12,
+                "graph_edges": 13,
+                "estimate_ready": True,
+            },
+        },
+    )
 
 
 def test_remediation_plan_requires_discovery() -> None:

@@ -147,3 +147,85 @@ def test_discovery_requires_online_registered_collector() -> None:
 
     assert response.status_code == 409
     assert response.json()["detail"] == "Collector must be online before discovery can run."
+
+
+def test_registered_collector_claim_with_no_work_returns_null_job() -> None:
+    client = TestClient(app)
+    bootstrap = client.post("/collectors/release1-demo/bootstrap").json()
+    registration_token = bootstrap["registration"]["registration_token"]
+    client.post(
+        "/collectors/release1-demo/register",
+        json={
+            "collector_id": "collector-release1-demo",
+            "registration_token": registration_token,
+            "version": "0.1.0",
+            "capabilities": ["fixture_discovery", "heartbeat"],
+        },
+    )
+
+    response = client.post(
+        "/collectors/collector-release1-demo/jobs/claim",
+        json={
+            "registration_token": registration_token,
+            "version": "0.1.0",
+            "capabilities": ["fixture_discovery", "heartbeat"],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["collector"]["status"] == "online"
+    assert payload["job"] is None
+
+
+def test_collector_job_claim_rejects_invalid_token() -> None:
+    client = TestClient(app)
+    client.post("/collectors/release1-demo/bootstrap")
+
+    response = client.post(
+        "/collectors/collector-release1-demo/jobs/claim",
+        json={
+            "registration_token": "wrong-token",
+            "version": "0.1.0",
+            "capabilities": ["fixture_discovery", "heartbeat"],
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid collector registration token."
+
+
+def test_collector_job_completion_requires_claimed_running_job() -> None:
+    client = TestClient(app)
+    bootstrap = client.post("/collectors/release1-demo/bootstrap").json()
+    registration_token = bootstrap["registration"]["registration_token"]
+    client.post(
+        "/collectors/release1-demo/register",
+        json={
+            "collector_id": "collector-release1-demo",
+            "registration_token": registration_token,
+            "version": "0.1.0",
+            "capabilities": ["fixture_discovery", "heartbeat"],
+        },
+    )
+    client.post("/discovery-runs/release1-demo/start")
+
+    response = client.post(
+        "/collectors/collector-release1-demo/jobs/discovery-release1-demo-001/complete",
+        json={
+            "registration_token": registration_token,
+            "version": "0.1.0",
+            "capabilities": ["fixture_discovery", "heartbeat"],
+            "result": {
+                "source": "fixture",
+                "compute_nodes": 3,
+                "network_segments": 3,
+                "graph_nodes": 12,
+                "graph_edges": 13,
+                "estimate_ready": True,
+            },
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Collector job is not running for this collector."

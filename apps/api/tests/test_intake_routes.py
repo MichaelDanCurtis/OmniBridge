@@ -58,13 +58,14 @@ def test_collector_registration_and_discovery_run_unlock_estimate_data() -> None
 
     assert bootstrap_response.status_code == 200
     bootstrap = bootstrap_response.json()
+    registration_token = bootstrap["registration"]["registration_token"]
     assert bootstrap["collector"]["status"] == "pending_registration"
 
     register_response = client.post(
         "/collectors/release1-demo/register",
         json={
             "collector_id": "collector-release1-demo",
-            "registration_token": bootstrap["registration"]["registration_token"],
+            "registration_token": registration_token,
             "version": "0.1.0",
             "capabilities": ["fixture_discovery", "heartbeat"],
         },
@@ -79,9 +80,58 @@ def test_collector_registration_and_discovery_run_unlock_estimate_data() -> None
     discovery_response = client.post("/discovery-runs/release1-demo/start")
 
     assert discovery_response.status_code == 200
-    discovered = discovery_response.json()
-    assert discovered["collector"]["status"] == "online"
-    assert discovered["discovery"] == {
+    queued = discovery_response.json()
+    assert queued["collector"]["status"] == "online"
+    assert queued["discovery"] == {
+        "run_id": "discovery-release1-demo-001",
+        "status": "queued",
+        "source": "fixture",
+        "compute_nodes": 0,
+        "network_segments": 0,
+        "graph_nodes": 0,
+        "graph_edges": 0,
+        "estimate_ready": False,
+    }
+
+    claim_response = client.post(
+        "/collectors/collector-release1-demo/jobs/claim",
+        json={
+            "registration_token": registration_token,
+            "version": "0.1.0",
+            "capabilities": ["fixture_discovery", "heartbeat"],
+        },
+    )
+
+    assert claim_response.status_code == 200
+    claim = claim_response.json()
+    assert claim["job"] == {
+        "job_id": "discovery-release1-demo-001",
+        "job_type": "discovery",
+        "status": "running",
+        "parameters": {"source": "fixture"},
+    }
+
+    complete_response = client.post(
+        "/collectors/collector-release1-demo/jobs/discovery-release1-demo-001/complete",
+        json={
+            "registration_token": registration_token,
+            "version": "0.1.0",
+            "capabilities": ["fixture_discovery", "heartbeat"],
+            "result": {
+                "source": "fixture",
+                "compute_nodes": 3,
+                "network_segments": 3,
+                "graph_nodes": 12,
+                "graph_edges": 13,
+                "estimate_ready": True,
+            },
+        },
+    )
+
+    assert complete_response.status_code == 200
+    completed = complete_response.json()
+    assert completed["collector"]["status"] == "online"
+    assert completed["discovery"] == {
         "run_id": "discovery-release1-demo-001",
         "status": "completed",
         "source": "fixture",
@@ -113,5 +163,5 @@ def test_online_collector_bootstrap_attempt_preserves_completed_discovery() -> N
     assert response.status_code == 409
     latest = client.get("/discovery-runs/release1-demo/latest").json()
     assert latest["collector"]["status"] == "online"
-    assert latest["discovery"]["status"] == "completed"
-    assert latest["discovery"]["estimate_ready"] is True
+    assert latest["discovery"]["status"] == "queued"
+    assert latest["discovery"]["estimate_ready"] is False

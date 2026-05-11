@@ -43,6 +43,14 @@ class CollectorNotFoundError(RuntimeError):
     pass
 
 
+class RunNotFoundError(RuntimeError):
+    pass
+
+
+class RunTransitionError(RuntimeError):
+    pass
+
+
 class ControlPlaneStore:
     def __init__(self, db_path: str | Path = settings.control_plane_db_path) -> None:
         self.db_path = Path(db_path)
@@ -188,6 +196,93 @@ class ControlPlaneStore:
         stored = self.get_run(run_id)
         if stored is None:
             raise RuntimeError(f"Run was not recorded: {run_id}")
+        return stored
+
+    def claim_next_run(
+        self,
+        *,
+        project_id: str,
+        collector_id: str,
+        registration_token: str,
+        version: str,
+        capabilities: list[str],
+    ) -> StoredRun | None:
+        self._assert_valid_token(collector_id, registration_token)
+        self._mark_collector_online(
+            collector_id=collector_id,
+            version=version,
+            capabilities=capabilities,
+        )
+        with self._connect() as connection:
+            self._ensure_schema(connection)
+            row = connection.execute(
+                """
+                SELECT run_id
+                FROM runs
+                WHERE project_id = ? AND status = ?
+                ORDER BY started_at ASC
+                LIMIT 1
+                """,
+                (project_id, "queued"),
+            ).fetchone()
+            if row is None:
+                return None
+
+            run_id = row["run_id"]
+            connection.execute(
+                """
+                UPDATE runs
+                SET status = ?, collector_id = ?
+                WHERE run_id = ?
+                """,
+                ("running", collector_id, run_id),
+            )
+
+        return self.get_run(run_id)
+
+    def complete_run(
+        self,
+        *,
+        run_id: str,
+        collector_id: str,
+        registration_token: str,
+        version: str,
+        capabilities: list[str],
+        result: dict[str, Any],
+    ) -> StoredRun:
+        self._assert_valid_token(collector_id, registration_token)
+        self._mark_collector_online(
+            collector_id=collector_id,
+            version=version,
+            capabilities=capabilities,
+        )
+        now = utc_now()
+        with self._connect() as connection:
+            self._ensure_schema(connection)
+            cursor = connection.execute(
+                """
+                UPDATE runs
+                SET status = ?, collector_id = ?, completed_at = ?, result_json = ?, error = NULL
+                WHERE run_id = ? AND collector_id = ? AND status = ?
+                """,
+                (
+                    "completed",
+                    collector_id,
+                    now,
+                    json.dumps(result, sort_keys=True),
+                    run_id,
+                    collector_id,
+                    "running",
+                ),
+            )
+        if cursor.rowcount == 0:
+            if self.get_run(run_id) is None:
+                raise RunNotFoundError(run_id)
+            raise RunTransitionError(run_id)
+
+        stored = self.get_run(run_id)
+        if stored is None:
+            raise RunNotFoundError(run_id)
         return stored
 
     def get_run(self, run_id: str) -> StoredRun | None:

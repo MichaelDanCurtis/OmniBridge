@@ -130,7 +130,7 @@ export type CollectorSnapshot = {
 
 export type DiscoveryRunSnapshot = {
   run_id: string | null;
-  status: "not_started" | "completed";
+  status: "not_started" | "queued" | "running" | "completed" | "failed";
   source: string;
   compute_nodes: number;
   network_segments: number;

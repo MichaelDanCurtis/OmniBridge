@@ -12,6 +12,8 @@ from urllib.request import Request, urlopen
 
 DEFAULT_REGISTER_PATH = "/collectors/release1-demo/register"
 DEFAULT_HEARTBEAT_PATH_TEMPLATE = "/collectors/{collector_id}/heartbeat"
+DEFAULT_JOB_CLAIM_PATH_TEMPLATE = "/collectors/{collector_id}/jobs/claim"
+DEFAULT_JOB_COMPLETE_PATH_TEMPLATE = "/collectors/{collector_id}/jobs/{job_id}/complete"
 
 
 @dataclass(frozen=True)
@@ -38,11 +40,15 @@ class CollectorClient:
         api_url: str,
         register_path: str = DEFAULT_REGISTER_PATH,
         heartbeat_path_template: str = DEFAULT_HEARTBEAT_PATH_TEMPLATE,
+        job_claim_path_template: str = DEFAULT_JOB_CLAIM_PATH_TEMPLATE,
+        job_complete_path_template: str = DEFAULT_JOB_COMPLETE_PATH_TEMPLATE,
         timeout: float = 10.0,
     ) -> None:
         self.api_url = api_url.rstrip("/")
         self.register_path = _normalize_path(register_path)
         self.heartbeat_path_template = _normalize_path(heartbeat_path_template)
+        self.job_claim_path_template = _normalize_path(job_claim_path_template)
+        self.job_complete_path_template = _normalize_path(job_complete_path_template)
         self.timeout = timeout
 
     def register(
@@ -78,6 +84,51 @@ class CollectorClient:
             {
                 "capabilities": capabilities,
                 "registration_token": registration_token,
+                "version": version,
+            },
+        )
+
+    def claim_job(
+        self,
+        *,
+        collector_id: str,
+        registration_token: str,
+        version: str,
+        capabilities: list[str],
+    ) -> CollectorResponse:
+        encoded_collector_id = quote(collector_id, safe="")
+        path = self.job_claim_path_template.format(collector_id=encoded_collector_id)
+        return self._post_json(
+            path,
+            {
+                "capabilities": capabilities,
+                "registration_token": registration_token,
+                "version": version,
+            },
+        )
+
+    def complete_job(
+        self,
+        *,
+        collector_id: str,
+        job_id: str,
+        registration_token: str,
+        version: str,
+        capabilities: list[str],
+        result: Mapping[str, Any],
+    ) -> CollectorResponse:
+        encoded_collector_id = quote(collector_id, safe="")
+        encoded_job_id = quote(job_id, safe="")
+        path = self.job_complete_path_template.format(
+            collector_id=encoded_collector_id,
+            job_id=encoded_job_id,
+        )
+        return self._post_json(
+            path,
+            {
+                "capabilities": capabilities,
+                "registration_token": registration_token,
+                "result": result,
                 "version": version,
             },
         )

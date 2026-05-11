@@ -10,6 +10,8 @@ from urllib.error import URLError
 
 from omnibridge_collector.client import (
     DEFAULT_HEARTBEAT_PATH_TEMPLATE,
+    DEFAULT_JOB_CLAIM_PATH_TEMPLATE,
+    DEFAULT_JOB_COMPLETE_PATH_TEMPLATE,
     DEFAULT_REGISTER_PATH,
     CollectorClient,
 )
@@ -25,6 +27,8 @@ def main(argv: list[str] | None = None, stdout: IO[str] = sys.stdout) -> int:
         api_url=args.api_url,
         register_path=args.register_path,
         heartbeat_path_template=args.heartbeat_path_template,
+        job_claim_path_template=args.job_claim_path_template,
+        job_complete_path_template=args.job_complete_path_template,
     )
     capabilities = _capabilities_from_args(args.capability)
 
@@ -36,8 +40,16 @@ def main(argv: list[str] | None = None, stdout: IO[str] = sys.stdout) -> int:
                 version=args.version,
                 capabilities=capabilities,
             )
-        else:
+        elif args.command == "heartbeat":
             response = client.heartbeat(
+                collector_id=args.collector_id,
+                registration_token=args.registration_token,
+                version=args.version,
+                capabilities=capabilities,
+            )
+        else:
+            response = _run_once(
+                client=client,
                 collector_id=args.collector_id,
                 registration_token=args.registration_token,
                 version=args.version,
@@ -63,6 +75,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
     heartbeat = subparsers.add_parser("heartbeat", help="send a collector heartbeat")
     _add_common_args(heartbeat)
+
+    run_once = subparsers.add_parser("run-once", help="claim and execute one collector job")
+    _add_common_args(run_once)
 
     return parser
 
@@ -92,6 +107,65 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
         default=DEFAULT_HEARTBEAT_PATH_TEMPLATE,
         help="heartbeat endpoint path template; supports {collector_id}",
     )
+    parser.add_argument(
+        "--job-claim-path-template",
+        default=DEFAULT_JOB_CLAIM_PATH_TEMPLATE,
+        help="job claim endpoint path template; supports {collector_id}",
+    )
+    parser.add_argument(
+        "--job-complete-path-template",
+        default=DEFAULT_JOB_COMPLETE_PATH_TEMPLATE,
+        help="job complete endpoint path template; supports {collector_id} and {job_id}",
+    )
+
+
+def _run_once(
+    *,
+    client: CollectorClient,
+    collector_id: str,
+    registration_token: str,
+    version: str,
+    capabilities: list[str],
+):
+    claim = client.claim_job(
+        collector_id=collector_id,
+        registration_token=registration_token,
+        version=version,
+        capabilities=capabilities,
+    )
+    if not claim.ok:
+        return claim
+
+    claim_body = claim.json_body if isinstance(claim.json_body, dict) else {}
+    job = claim_body.get("job")
+    if not isinstance(job, dict):
+        return claim
+
+    job_id = str(job.get("job_id", ""))
+    job_type = str(job.get("job_type", ""))
+    parameters = job.get("parameters")
+    if job_type != "discovery" or not isinstance(parameters, dict):
+        return claim
+
+    return client.complete_job(
+        collector_id=collector_id,
+        job_id=job_id,
+        registration_token=registration_token,
+        version=version,
+        capabilities=capabilities,
+        result=_fixture_discovery_result(parameters),
+    )
+
+
+def _fixture_discovery_result(parameters: dict[str, object]) -> dict[str, object]:
+    return {
+        "source": str(parameters.get("source", "fixture")),
+        "compute_nodes": 3,
+        "network_segments": 3,
+        "graph_nodes": 12,
+        "graph_edges": 13,
+        "estimate_ready": True,
+    }
 
 
 def _capabilities_from_args(capabilities: list[str] | None) -> list[str]:
