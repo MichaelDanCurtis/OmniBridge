@@ -1,10 +1,16 @@
 from fastapi import APIRouter, HTTPException
 
 from omnibridge_api.intake_state import (
+    CollectorAlreadyOnlineError,
+    CollectorHeartbeatRequest,
+    CollectorNotFoundError,
     CollectorNotConnectedError,
-    deploy_release1_collector,
+    CollectorRegistrationRequest,
+    InvalidRegistrationTokenError,
+    bootstrap_release1_collector,
     get_release1_intake_snapshot,
     record_release1_collector_heartbeat,
+    register_release1_collector,
     start_release1_discovery_run,
 )
 
@@ -13,14 +19,56 @@ collectors_router = APIRouter(prefix="/collectors", tags=["intake"])
 discovery_runs_router = APIRouter(prefix="/discovery-runs", tags=["intake"])
 
 
+@collectors_router.post("/release1-demo/bootstrap")
+def bootstrap_release1_demo_collector() -> dict[str, object]:
+    try:
+        bootstrap = bootstrap_release1_collector()
+    except CollectorAlreadyOnlineError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return bootstrap.model_dump(mode="json")
+
+
 @collectors_router.post("/release1-demo/deploy")
 def deploy_release1_demo_collector() -> dict[str, object]:
-    return deploy_release1_collector().model_dump(mode="json")
+    try:
+        bootstrap = bootstrap_release1_collector()
+    except CollectorAlreadyOnlineError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return bootstrap.model_dump(mode="json")
 
 
-@collectors_router.post("/release1-demo/heartbeat")
-def heartbeat_release1_demo_collector() -> dict[str, object]:
-    return record_release1_collector_heartbeat().model_dump(mode="json")
+@collectors_router.post("/release1-demo/register")
+def register_release1_demo_collector(
+    request: CollectorRegistrationRequest,
+) -> dict[str, object]:
+    try:
+        snapshot = register_release1_collector(request)
+    except CollectorNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Collector was not bootstrapped.") from exc
+    except InvalidRegistrationTokenError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    return snapshot.model_dump(mode="json")
+
+
+@collectors_router.post("/{collector_id}/heartbeat")
+def heartbeat_collector(
+    collector_id: str,
+    request: CollectorHeartbeatRequest,
+) -> dict[str, object]:
+    try:
+        snapshot = record_release1_collector_heartbeat(
+            collector_id=collector_id,
+            request=request,
+        )
+    except CollectorNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Collector was not bootstrapped.") from exc
+    except InvalidRegistrationTokenError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    return snapshot.model_dump(mode="json")
 
 
 @discovery_runs_router.get("/release1-demo/latest")

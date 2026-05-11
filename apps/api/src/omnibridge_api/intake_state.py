@@ -1,10 +1,17 @@
-from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from threading import Lock
+import secrets
 
 from pydantic import BaseModel
 
+from omnibridge_api.control_plane_store import (
+    CollectorNotFoundError,
+    ControlPlaneStore,
+    InvalidRegistrationTokenError,
+    StoredCollector,
+    default_store,
+)
+from omnibridge_api.settings import settings
 from omnibridge_vmware_to_azure.fixture_loader import load_fixture
 from omnibridge_vmware_to_azure.mapper import map_fixture_to_graph
 
@@ -13,12 +20,17 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 _RELEASE1_FIXTURE_PATH = (
     _REPO_ROOT / "corridors" / "vmware-to-azure" / "fixtures" / "acme-small-estate.json"
 )
-_FIXED_RELEASE1_HEARTBEAT = "2026-05-10T12:00:00Z"
+_RELEASE1_PROJECT_ID = "project-acme-vmware-azure"
+_RELEASE1_COLLECTOR_ID = "collector-release1-demo"
+_RELEASE1_VCENTER = "vcsa-prod-01"
 
 
 class CollectorStatus(StrEnum):
     NOT_DEPLOYED = "not_deployed"
-    CONNECTED = "connected"
+    PENDING_REGISTRATION = "pending_registration"
+    ONLINE = "online"
+    OFFLINE = "offline"
+    REVOKED = "revoked"
 
 
 class DiscoveryRunStatus(StrEnum):
@@ -31,6 +43,8 @@ class CollectorSnapshot(BaseModel):
     status: CollectorStatus
     vcenter: str
     last_heartbeat_at: str | None
+    version: str | None = None
+    capabilities: list[str] = []
 
 
 class DiscoveryRunSnapshot(BaseModel):
@@ -50,86 +64,193 @@ class IntakeSnapshot(BaseModel):
     discovery: DiscoveryRunSnapshot
 
 
+class CollectorRegistrationPackage(BaseModel):
+    collector_id: str
+    registration_token: str
+    api_url: str
+    install_command: str
+
+
+class CollectorBootstrapResponse(BaseModel):
+    project_id: str
+    collector: CollectorSnapshot
+    registration: CollectorRegistrationPackage
+
+
+class CollectorRegistrationRequest(BaseModel):
+    collector_id: str
+    registration_token: str
+    version: str
+    capabilities: list[str]
+
+
+class CollectorHeartbeatRequest(BaseModel):
+    registration_token: str
+    version: str
+    capabilities: list[str]
+
+
 class CollectorNotConnectedError(RuntimeError):
     pass
 
 
-@dataclass
-class _Release1IntakeState:
-    collector_status: CollectorStatus = CollectorStatus.NOT_DEPLOYED
-    last_heartbeat_at: str | None = None
-    discovery_status: DiscoveryRunStatus = DiscoveryRunStatus.NOT_STARTED
-    discovery_run_id: str | None = None
-    compute_nodes: int = 0
-    network_segments: int = 0
-    graph_nodes: int = 0
-    graph_edges: int = 0
-
-
-_state = _Release1IntakeState()
-_state_lock = Lock()
+class CollectorAlreadyOnlineError(RuntimeError):
+    pass
 
 
 def reset_release1_intake_state() -> None:
-    with _state_lock:
-        global _state
-        _state = _Release1IntakeState()
+    default_store().reset()
 
 
 def get_release1_intake_snapshot() -> IntakeSnapshot:
-    with _state_lock:
-        return _snapshot_from_state(_state)
+    return _snapshot_from_store(default_store())
 
 
-def deploy_release1_collector() -> IntakeSnapshot:
-    with _state_lock:
-        _state.collector_status = CollectorStatus.CONNECTED
-        _state.last_heartbeat_at = _FIXED_RELEASE1_HEARTBEAT
-        return _snapshot_from_state(_state)
+def bootstrap_release1_collector() -> CollectorBootstrapResponse:
+    store = default_store()
+    existing = store.get_collector(_RELEASE1_COLLECTOR_ID)
+    if existing is not None and existing.status == CollectorStatus.ONLINE:
+        raise CollectorAlreadyOnlineError(
+            "Collector is already online. Revoke or rotate it explicitly before bootstrapping."
+        )
+
+    registration_token = secrets.token_urlsafe(32)
+    stored = store.bootstrap_collector(
+        project_id=_RELEASE1_PROJECT_ID,
+        collector_id=_RELEASE1_COLLECTOR_ID,
+        vcenter=_RELEASE1_VCENTER,
+        registration_token=registration_token,
+    )
+    registration = CollectorRegistrationPackage(
+        collector_id=_RELEASE1_COLLECTOR_ID,
+        registration_token=registration_token,
+        api_url=settings.api_public_url,
+        install_command=(
+            "omnibridge-collector register "
+            f"--api-url {settings.api_public_url} "
+            f"--collector-id {_RELEASE1_COLLECTOR_ID} "
+            f"--registration-token {registration_token}"
+        ),
+    )
+    return CollectorBootstrapResponse(
+        project_id=_RELEASE1_PROJECT_ID,
+        collector=_collector_snapshot(stored),
+        registration=registration,
+    )
 
 
-def record_release1_collector_heartbeat() -> IntakeSnapshot:
-    with _state_lock:
-        _state.collector_status = CollectorStatus.CONNECTED
-        _state.last_heartbeat_at = _FIXED_RELEASE1_HEARTBEAT
-        return _snapshot_from_state(_state)
+def register_release1_collector(request: CollectorRegistrationRequest) -> IntakeSnapshot:
+    stored = default_store().register_collector(
+        collector_id=request.collector_id,
+        registration_token=request.registration_token,
+        version=request.version,
+        capabilities=request.capabilities,
+    )
+    return _snapshot_from_store(default_store(), collector=stored)
+
+
+def record_release1_collector_heartbeat(
+    collector_id: str,
+    request: CollectorHeartbeatRequest,
+) -> IntakeSnapshot:
+    stored = default_store().record_collector_heartbeat(
+        collector_id=collector_id,
+        registration_token=request.registration_token,
+        version=request.version,
+        capabilities=request.capabilities,
+    )
+    return _snapshot_from_store(default_store(), collector=stored)
 
 
 def start_release1_discovery_run() -> IntakeSnapshot:
-    with _state_lock:
-        if _state.collector_status != CollectorStatus.CONNECTED:
-            raise CollectorNotConnectedError(
-                "Collector must be connected before discovery can run."
-            )
+    store = default_store()
+    collector = store.get_collector(_RELEASE1_COLLECTOR_ID)
+    if collector is None or collector.status != CollectorStatus.ONLINE:
+        raise CollectorNotConnectedError("Collector must be online before discovery can run.")
 
-        fixture = load_fixture(_RELEASE1_FIXTURE_PATH)
-        graph = map_fixture_to_graph(fixture)
-        _state.discovery_status = DiscoveryRunStatus.COMPLETED
-        _state.discovery_run_id = "discovery-release1-demo-001"
-        _state.compute_nodes = len(fixture.get("vms", []))
-        _state.network_segments = len(fixture.get("networks", []))
-        _state.graph_nodes = len(graph.nodes)
-        _state.graph_edges = len(graph.edges)
-        return _snapshot_from_state(_state)
+    fixture = load_fixture(_RELEASE1_FIXTURE_PATH)
+    graph = map_fixture_to_graph(fixture)
+    result = {
+        "source": "fixture",
+        "compute_nodes": len(fixture.get("vms", [])),
+        "network_segments": len(fixture.get("networks", [])),
+        "graph_nodes": len(graph.nodes),
+        "graph_edges": len(graph.edges),
+        "estimate_ready": True,
+    }
+    store.record_run(
+        run_id="discovery-release1-demo-001",
+        project_id=_RELEASE1_PROJECT_ID,
+        run_type="discovery",
+        status="completed",
+        collector_id=collector.collector_id,
+        result=result,
+    )
+    return _snapshot_from_store(store, collector=collector)
 
 
-def _snapshot_from_state(state: _Release1IntakeState) -> IntakeSnapshot:
+def _snapshot_from_store(
+    store: ControlPlaneStore,
+    collector: StoredCollector | None = None,
+) -> IntakeSnapshot:
+    stored_collector = collector or store.get_collector(_RELEASE1_COLLECTOR_ID)
+    discovery_run = store.get_run("discovery-release1-demo-001")
+    discovery_result = discovery_run.result if discovery_run else {}
     return IntakeSnapshot(
-        project_id="project-acme-vmware-azure",
-        collector=CollectorSnapshot(
-            collector_id="collector-release1-demo",
-            status=state.collector_status,
-            vcenter="vcsa-prod-01",
-            last_heartbeat_at=state.last_heartbeat_at,
+        project_id=_RELEASE1_PROJECT_ID,
+        collector=(
+            _collector_snapshot(stored_collector)
+            if stored_collector is not None
+            else _default_collector_snapshot()
         ),
         discovery=DiscoveryRunSnapshot(
-            run_id=state.discovery_run_id,
-            status=state.discovery_status,
-            source="fixture",
-            compute_nodes=state.compute_nodes,
-            network_segments=state.network_segments,
-            graph_nodes=state.graph_nodes,
-            graph_edges=state.graph_edges,
-            estimate_ready=state.discovery_status == DiscoveryRunStatus.COMPLETED,
+            run_id=discovery_run.run_id if discovery_run else None,
+            status=(
+                DiscoveryRunStatus.COMPLETED
+                if discovery_run and discovery_run.status == "completed"
+                else DiscoveryRunStatus.NOT_STARTED
+            ),
+            source=str(discovery_result.get("source", "fixture")),
+            compute_nodes=int(discovery_result.get("compute_nodes", 0)),
+            network_segments=int(discovery_result.get("network_segments", 0)),
+            graph_nodes=int(discovery_result.get("graph_nodes", 0)),
+            graph_edges=int(discovery_result.get("graph_edges", 0)),
+            estimate_ready=bool(discovery_result.get("estimate_ready", False)),
         ),
     )
+
+
+def _collector_snapshot(stored: StoredCollector) -> CollectorSnapshot:
+    return CollectorSnapshot(
+        collector_id=stored.collector_id,
+        status=CollectorStatus(stored.status),
+        vcenter=stored.vcenter,
+        last_heartbeat_at=stored.last_heartbeat_at,
+        version=stored.version,
+        capabilities=stored.capabilities,
+    )
+
+
+def _default_collector_snapshot() -> CollectorSnapshot:
+    return CollectorSnapshot(
+        collector_id=_RELEASE1_COLLECTOR_ID,
+        status=CollectorStatus.NOT_DEPLOYED,
+        vcenter=_RELEASE1_VCENTER,
+        last_heartbeat_at=None,
+    )
+
+
+__all__ = [
+    "CollectorAlreadyOnlineError",
+    "CollectorHeartbeatRequest",
+    "CollectorNotConnectedError",
+    "CollectorRegistrationRequest",
+    "InvalidRegistrationTokenError",
+    "CollectorNotFoundError",
+    "bootstrap_release1_collector",
+    "get_release1_intake_snapshot",
+    "record_release1_collector_heartbeat",
+    "register_release1_collector",
+    "reset_release1_intake_state",
+    "start_release1_discovery_run",
+]

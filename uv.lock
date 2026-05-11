@@ -10,6 +10,7 @@ members = [
     "omnibridge-azure-migrate-adapter",
     "omnibridge-blueprint-engine",
     "omnibridge-canonical-graph",
+    "omnibridge-collector",
     "omnibridge-estimator",
     "omnibridge-rules-engine",
     "omnibridge-validation-engine",
@@ -457,6 +458,7 @@ dev = [
     { name = "omnibridge-azure-migrate-adapter" },
     { name = "omnibridge-blueprint-engine" },
     { name = "omnibridge-canonical-graph" },
+    { name = "omnibridge-collector" },
     { name = "omnibridge-estimator" },
     { name = "omnibridge-rules-engine" },
     { name = "omnibridge-validation-engine" },
@@ -476,6 +478,7 @@ dev = [
     { name = "omnibridge-azure-migrate-adapter", editable = "packages/azure-migrate-adapter" },
     { name = "omnibridge-blueprint-engine", editable = "packages/blueprint-engine" },
     { name = "omnibridge-canonical-graph", editable = "packages/canonical-graph" },
+    { name = "omnibridge-collector", editable = "apps/collector" },
     { name = "omnibridge-estimator", editable = "packages/estimator" },
     { name = "omnibridge-rules-engine", editable = "packages/rules-engine" },
     { name = "omnibridge-validation-engine", editable = "packages/validation-engine" },
@@ -577,6 +580,11 @@ requires-dist = [
     { name = "neo4j", specifier = ">=5.25.0" },
     { name = "pydantic", specifier = ">=2.8.0" },
 ]
+
+[[package]]
+name = "omnibridge-collector"
+version = "0.1.0"
+source = { editable = "apps/collector" }
 
 [[package]]
 name = "omnibridge-estimator"

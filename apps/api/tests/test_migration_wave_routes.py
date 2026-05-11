@@ -24,7 +24,16 @@ def release1_workflow_state() -> Iterator[None]:
 
 
 def _complete_discovery(client: TestClient) -> None:
-    client.post("/collectors/release1-demo/deploy")
+    bootstrap = client.post("/collectors/release1-demo/bootstrap").json()
+    client.post(
+        "/collectors/release1-demo/register",
+        json={
+            "collector_id": "collector-release1-demo",
+            "registration_token": bootstrap["registration"]["registration_token"],
+            "version": "0.1.0",
+            "capabilities": ["fixture_discovery", "heartbeat"],
+        },
+    )
     client.post("/discovery-runs/release1-demo/start")
 
 

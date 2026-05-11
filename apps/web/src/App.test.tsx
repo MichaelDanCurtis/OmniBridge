@@ -38,7 +38,7 @@ describe("App", () => {
         node_count: 12,
         edge_count: 13,
         persisted: false,
-        neo4j_configured: false,
+        neo4j_configured: true,
       },
       intake: {
         project_id: "project-acme-vmware-azure",
@@ -47,6 +47,8 @@ describe("App", () => {
           status: "not_deployed",
           vcenter: "vcsa-prod-01",
           last_heartbeat_at: null,
+          version: null,
+          capabilities: [],
         },
         discovery: {
           run_id: null,
@@ -338,15 +340,39 @@ describe("App", () => {
         );
       }
 
-      if (path === "/collectors/release1-demo/deploy" && init?.method === "POST") {
+      if (path === "/collectors/release1-demo/bootstrap" && init?.method === "POST") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              project_id: "project-acme-vmware-azure",
+              collector: {
+                ...workspaceResponse.intake.collector,
+                status: "pending_registration",
+              },
+              registration: {
+                api_url: "http://127.0.0.1:8001",
+                collector_id: "collector-release1-demo",
+                install_command:
+                  "omnibridge-collector register --api-url http://127.0.0.1:8001 --collector-id collector-release1-demo --registration-token token-abc",
+                registration_token: "token-abc",
+              },
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+
+      if (path === "/discovery-runs/release1-demo/latest" && init === undefined) {
         return Promise.resolve(
           new Response(
             JSON.stringify({
               ...workspaceResponse.intake,
               collector: {
                 ...workspaceResponse.intake.collector,
-                status: "connected",
-                last_heartbeat_at: "2026-05-10T12:00:00Z",
+                status: "online",
+                last_heartbeat_at: "2026-05-11T12:00:00Z",
+                version: "0.1.0",
+                capabilities: ["fixture_discovery", "heartbeat"],
               },
             }),
             { status: 200 },
@@ -361,8 +387,10 @@ describe("App", () => {
               ...workspaceResponse.intake,
               collector: {
                 ...workspaceResponse.intake.collector,
-                status: "connected",
-                last_heartbeat_at: "2026-05-10T12:00:00Z",
+                status: "online",
+                last_heartbeat_at: "2026-05-11T12:00:00Z",
+                version: "0.1.0",
+                capabilities: ["fixture_discovery", "heartbeat"],
               },
               discovery: {
                 run_id: "discovery-release1-demo-001",
@@ -470,23 +498,28 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(
-      await screen.findByRole("heading", { name: "Claims Portal" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "VMware ingress" })).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "OmniBridge Consultant Workspace" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "VMware ingress" })).toBeInTheDocument();
     expect(screen.getByText("Collector not deployed")).toBeInTheDocument();
+    expect(screen.getByText("Fixture-backed demo discovery")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Discovery results locked" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Claims Portal" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Cost estimate" })).toBeInTheDocument();
     expect(screen.getByText("Locked until discovery")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Migration scope" })).toBeInTheDocument();
     expect(screen.getByText("Locked until estimate approval")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Deploy collector" }));
-    expect(await screen.findByText("Connected to vcsa-prod-01")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Run data collection" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate bootstrap" }));
+    expect(await screen.findByText("Waiting for collector registration")).toBeInTheDocument();
+    expect(screen.getByText("omnibridge-collector register --api-url http://127.0.0.1:8001 --collector-id collector-release1-demo --registration-token token-abc")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh collector" }));
+    expect(await screen.findByText("Online at 2026-05-11T12:00:00Z")).toBeInTheDocument();
+    expect(screen.getByText("Ready to load fixture")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load fixture discovery" }));
     expect(await screen.findByText("Discovery complete")).toBeInTheDocument();
-    expect(screen.getByText("3 VMs discovered")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Claims Portal" })).toBeInTheDocument();
+    expect(screen.getByText("3 VMs loaded from fixture")).toBeInTheDocument();
     expect(screen.getByText("$27,250 project fee")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Approve estimate package" }));
     expect(await screen.findByText("5 pending")).toBeInTheDocument();
@@ -528,7 +561,7 @@ describe("App", () => {
     expect(screen.getByText("HAS_VOLUME")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Graph persistence" })).toBeInTheDocument();
     expect(screen.getByText("12 nodes / 13 edges")).toBeInTheDocument();
-    expect(screen.getAllByText("Neo4j not configured").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Neo4j configured").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Persist to Neo4j" }));
     expect(await screen.findByText("Persisted to Neo4j")).toBeInTheDocument();
     expect(screen.getByText("Confirm whether claims-db-01 snapshot can be removed.")).toBeInTheDocument();
@@ -555,9 +588,10 @@ describe("App", () => {
     expect(fetchMock).toHaveBeenCalledWith("/workspace/release1-demo");
     expect(fetchMock).toHaveBeenCalledWith("/approvals/release1-demo");
     expect(fetchMock).toHaveBeenCalledWith(
-      "/collectors/release1-demo/deploy",
+      "/collectors/release1-demo/bootstrap",
       expect.objectContaining({ method: "POST" }),
     );
+    expect(fetchMock).toHaveBeenCalledWith("/discovery-runs/release1-demo/latest");
     expect(fetchMock).toHaveBeenCalledWith(
       "/discovery-runs/release1-demo/start",
       expect.objectContaining({ method: "POST" }),

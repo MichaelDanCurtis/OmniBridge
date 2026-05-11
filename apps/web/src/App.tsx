@@ -2,16 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   approveGate,
+  bootstrapCollector,
   createMigrationWave,
   createRemediationPlan,
-  deployCollector,
   loadCurrentMigrationWave,
   loadApprovals,
+  loadLatestDiscoveryRun,
   loadWorkspaceData,
   persistFixtureGraph,
   startDiscoveryRun,
   type GraphIngestStatus,
   type IntakeSnapshot,
+  type CollectorBootstrap,
   type MigrationWaveCreation,
   type ProjectWorkflow,
   type RemediationPlan,
@@ -120,6 +122,8 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
   const [intakeError, setIntakeError] = useState<string | null>(null);
   const [isDeployingCollector, setIsDeployingCollector] = useState(false);
   const [isRunningDiscovery, setIsRunningDiscovery] = useState(false);
+  const [isRefreshingCollector, setIsRefreshingCollector] = useState(false);
+  const [collectorBootstrap, setCollectorBootstrap] = useState<CollectorBootstrap | null>(null);
   const [approvalError, setApprovalError] = useState<string | null>(null);
   const [approvingGate, setApprovingGate] = useState<string | null>(null);
   const [migrationWave, setMigrationWave] = useState<MigrationWaveCreation | null>(null);
@@ -201,15 +205,28 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
     : graphIngest.neo4j_configured
       ? "Ready to persist"
       : "Neo4j not configured";
+  const isFixtureDiscovery = intake.discovery.source === "fixture";
+  const canBootstrapCollector =
+    intake.collector.status !== "online" && !intake.discovery.estimate_ready;
   const collectorLabel =
     intake.discovery.status === "completed"
       ? "Discovery complete"
-      : intake.collector.status === "connected"
-        ? `Connected to ${intake.collector.vcenter}`
-        : "Collector not deployed";
+      : intake.collector.status === "online"
+        ? `Online at ${intake.collector.last_heartbeat_at ?? "heartbeat pending"}`
+        : intake.collector.status === "pending_registration"
+          ? "Waiting for collector registration"
+          : intake.collector.status === "offline"
+            ? "Collector offline"
+            : intake.collector.status === "revoked"
+              ? "Collector revoked"
+              : "Collector not deployed";
   const collectionLabel = intake.discovery.estimate_ready
-    ? `${intake.discovery.compute_nodes} VMs discovered`
-    : "Awaiting collection";
+    ? `${intake.discovery.compute_nodes} VMs loaded from ${intake.discovery.source}`
+    : intake.collector.status === "online"
+      ? isFixtureDiscovery
+        ? "Ready to load fixture"
+        : "Ready to collect"
+      : "Awaiting collector";
 
   useEffect(() => {
     let isMounted = true;
@@ -256,11 +273,28 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
     setIsDeployingCollector(true);
     setIntakeError(null);
     try {
-      setIntake(await deployCollector());
+      const bootstrap = await bootstrapCollector();
+      setCollectorBootstrap(bootstrap);
+      setIntake((current) => ({
+        ...current,
+        collector: bootstrap.collector,
+      }));
     } catch {
-      setIntakeError("Collector deployment failed");
+      setIntakeError("Collector bootstrap failed");
     } finally {
       setIsDeployingCollector(false);
+    }
+  }
+
+  async function handleRefreshCollector() {
+    setIsRefreshingCollector(true);
+    setIntakeError(null);
+    try {
+      setIntake(await loadLatestDiscoveryRun());
+    } catch {
+      setIntakeError("Collector status refresh failed");
+    } finally {
+      setIsRefreshingCollector(false);
     }
   }
 
@@ -386,24 +420,33 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
                 <dt>Collection</dt>
                 <dd>{collectionLabel}</dd>
               </div>
+              <div>
+                <dt>Discovery source</dt>
+                <dd>{isFixtureDiscovery ? "Fixture-backed demo" : intake.discovery.source}</dd>
+              </div>
             </dl>
+            {isFixtureDiscovery ? (
+              <span className="workflow-lock">Fixture-backed demo discovery</span>
+            ) : null}
             <div className="workflow-actions">
               <button
                 className="primary-action"
-                disabled={intake.collector.status !== "not_deployed" || isDeployingCollector}
+                disabled={!canBootstrapCollector || isDeployingCollector}
                 onClick={() => void handleDeployCollector()}
                 type="button"
               >
-                {intake.collector.status === "not_deployed"
-                  ? isDeployingCollector
-                    ? "Deploying..."
-                    : "Deploy collector"
-                  : "Collector deployed"}
+                {isDeployingCollector
+                  ? "Generating..."
+                  : intake.collector.status === "not_deployed"
+                    ? "Generate bootstrap"
+                    : intake.collector.status === "online"
+                      ? "Collector registered"
+                      : "Regenerate bootstrap"}
               </button>
               <button
                 className="secondary-action"
                 disabled={
-                  intake.collector.status === "not_deployed" ||
+                  intake.collector.status !== "online" ||
                   intake.discovery.estimate_ready ||
                   isRunningDiscovery
                 }
@@ -411,12 +454,38 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
                 type="button"
               >
                 {intake.discovery.estimate_ready
-                  ? "Collection complete"
+                  ? "Fixture loaded"
                   : isRunningDiscovery
-                    ? "Collecting..."
-                    : "Run data collection"}
+                    ? "Loading fixture..."
+                    : isFixtureDiscovery
+                      ? "Load fixture discovery"
+                      : "Run data collection"}
+              </button>
+              <button
+                className="secondary-action"
+                disabled={intake.collector.status === "not_deployed" || isRefreshingCollector}
+                onClick={() => void handleRefreshCollector()}
+                type="button"
+              >
+                {isRefreshingCollector ? "Refreshing..." : "Refresh collector"}
               </button>
             </div>
+            {collectorBootstrap ? (
+              <dl className="workflow-facts workflow-facts--compact">
+                <div>
+                  <dt>API URL</dt>
+                  <dd>{collectorBootstrap.registration.api_url}</dd>
+                </div>
+                <div>
+                  <dt>Collector ID</dt>
+                  <dd>{collectorBootstrap.registration.collector_id}</dd>
+                </div>
+                <div>
+                  <dt>Install command</dt>
+                  <dd>{collectorBootstrap.registration.install_command}</dd>
+                </div>
+              </dl>
+            ) : null}
           </article>
 
           <article className={`workflow-card ${canReviewEstimate ? "workflow-card--active" : ""}`}>
@@ -483,26 +552,35 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
                 ? `${selectedScope.length} ${selectedScope.length === 1 ? "VM" : "VMs"} selected for wave-001`
                 : "Locked until estimate approval"}
             </span>
-            <ul className="scope-list">
-              {migrationCandidates.map((candidate) => (
-                <li key={candidate.name}>
-                  <label>
-                    <input
-                      aria-label={candidate.name}
-                      checked={selectedScope.includes(candidate.name)}
-                      disabled={!canSelectScope || migrationWave !== null}
-                      onChange={() => handleToggleScope(candidate.name)}
-                      type="checkbox"
-                    />
-                    <span>{candidate.name}</span>
-                  </label>
-                  <small>
-                    {candidate.source_network} -&gt; {candidate.subnet} / {candidate.vm_size} /{" "}
-                    {candidate.readiness}
-                  </small>
+            {canSelectScope || migrationWave ? (
+              <ul className="scope-list">
+                {migrationCandidates.map((candidate) => (
+                  <li key={candidate.name}>
+                    <label>
+                      <input
+                        aria-label={candidate.name}
+                        checked={selectedScope.includes(candidate.name)}
+                        disabled={!canSelectScope || migrationWave !== null}
+                        onChange={() => handleToggleScope(candidate.name)}
+                        type="checkbox"
+                      />
+                      <span>{candidate.name}</span>
+                    </label>
+                    <small>
+                      {candidate.source_network} -&gt; {candidate.subnet} / {candidate.vm_size} /{" "}
+                      {candidate.readiness}
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <ul className="scope-list">
+                <li>
+                  <strong>Scope choices locked</strong>
+                  <small>Complete discovery and approve the estimate to select migration assets.</small>
                 </li>
-              ))}
-            </ul>
+              </ul>
+            )}
             <div className="workflow-actions">
               <button
                 className="primary-action"
@@ -585,6 +663,8 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
         {remediationPlanError ? <p className="error-message">{remediationPlanError}</p> : null}
       </section>
 
+      {canReviewEstimate ? (
+        <>
       <section className="assessment-panel" aria-labelledby="assessment-title">
         <div className="panel-heading">
           <div>
@@ -927,11 +1007,15 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
           </div>
           <button
             className="secondary-action"
-            disabled={isPersistingGraph}
+            disabled={!graphIngest.neo4j_configured || isPersistingGraph}
             onClick={handlePersistGraph}
             type="button"
           >
-            {isPersistingGraph ? "Persisting..." : "Persist to Neo4j"}
+            {graphIngest.neo4j_configured
+              ? isPersistingGraph
+                ? "Persisting..."
+                : "Persist to Neo4j"
+              : "Configure Neo4j first"}
           </button>
           {graphPersistError ? <p className="error-message">{graphPersistError}</p> : null}
         </article>
@@ -1055,6 +1139,22 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
           </ul>
         </article>
       </section>
+        </>
+      ) : (
+        <section className="assessment-panel" aria-labelledby="locked-results-title">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Awaiting collector output</p>
+              <h2 id="locked-results-title">Discovery results locked</h2>
+            </div>
+            <span className="status-pill">Pending discovery</span>
+          </div>
+          <p className="analysis-summary">
+            Estimate, inventory, topology, target design, generated artifacts, and migration wave
+            controls unlock after the collector is online and fixture discovery is loaded.
+          </p>
+        </section>
+      )}
     </main>
   );
 }

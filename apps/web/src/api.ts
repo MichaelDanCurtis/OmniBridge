@@ -121,9 +121,11 @@ export type GraphIngestStatus = {
 
 export type CollectorSnapshot = {
   collector_id: string;
-  status: "not_deployed" | "connected";
+  status: "not_deployed" | "pending_registration" | "online" | "offline" | "revoked";
   vcenter: string;
   last_heartbeat_at: string | null;
+  version: string | null;
+  capabilities: string[];
 };
 
 export type DiscoveryRunSnapshot = {
@@ -141,6 +143,17 @@ export type IntakeSnapshot = {
   project_id: string;
   collector: CollectorSnapshot;
   discovery: DiscoveryRunSnapshot;
+};
+
+export type CollectorBootstrap = {
+  project_id: string;
+  collector: CollectorSnapshot;
+  registration: {
+    collector_id: string;
+    registration_token: string;
+    api_url: string;
+    install_command: string;
+  };
 };
 
 export type GraphImportResponse = {
@@ -320,16 +333,20 @@ export async function persistFixtureGraph(): Promise<GraphImportResponse> {
   return response.json() as Promise<GraphImportResponse>;
 }
 
-export async function deployCollector(): Promise<IntakeSnapshot> {
-  const response = await fetch("/collectors/release1-demo/deploy", {
+export async function bootstrapCollector(): Promise<CollectorBootstrap> {
+  const response = await fetch("/collectors/release1-demo/bootstrap", {
     method: "POST",
   });
 
   if (!response.ok) {
-    throw new Error(`Collector deployment failed: ${response.status}`);
+    throw new Error(`Collector bootstrap failed: ${response.status}`);
   }
 
-  return response.json() as Promise<IntakeSnapshot>;
+  return response.json() as Promise<CollectorBootstrap>;
+}
+
+export async function loadLatestDiscoveryRun(): Promise<IntakeSnapshot> {
+  return requestJson<IntakeSnapshot>("/discovery-runs/release1-demo/latest");
 }
 
 export async function startDiscoveryRun(): Promise<IntakeSnapshot> {
