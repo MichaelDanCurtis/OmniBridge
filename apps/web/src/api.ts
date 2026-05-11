@@ -179,6 +179,23 @@ export type MigrationWaveCreation = {
   next_action: string;
 };
 
+export type RemediationPlan = {
+  plan_id: string;
+  status: string;
+  task_count: number;
+  tasks: Array<{
+    task_id: string;
+    target_name: string;
+    rule_id: string;
+    severity: string;
+    owner_role: string;
+    automation_mode: string;
+    approval_required: boolean;
+    recommended_action: string;
+  }>;
+  next_action: string;
+};
+
 export type ExecutionOperation = {
   name: string;
   execution_mode: string;
@@ -341,6 +358,26 @@ export async function createMigrationWave(
   }
 
   return response.json() as Promise<MigrationWaveCreation>;
+}
+
+export async function createRemediationPlan(
+  computeNodes: string[],
+): Promise<RemediationPlan> {
+  const response = await fetch("/remediation-plans/release1-demo", {
+    body: JSON.stringify({
+      compute_nodes: computeNodes,
+    }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Remediation planning failed: ${response.status}`);
+  }
+
+  return response.json() as Promise<RemediationPlan>;
 }
 
 export async function approveGate(gate: string): Promise<ApprovalRecord> {

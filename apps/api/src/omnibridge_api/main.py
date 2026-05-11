@@ -13,6 +13,7 @@ from omnibridge_api.routes.intake import (
     discovery_runs_router,
 )
 from omnibridge_api.routes.migration_waves import router as migration_waves_router
+from omnibridge_api.routes.remediation_plans import router as remediation_plans_router
 from omnibridge_api.routes.validation import router as validation_router
 from omnibridge_api.routes.workspace import router as workspace_router
 from omnibridge_api.settings import settings
@@ -31,6 +32,7 @@ app.include_router(workspace_router)
 app.include_router(collectors_router)
 app.include_router(discovery_runs_router)
 app.include_router(migration_waves_router)
+app.include_router(remediation_plans_router)
 
 
 @app.get("/health")

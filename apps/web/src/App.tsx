@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   approveGate,
   createMigrationWave,
+  createRemediationPlan,
   deployCollector,
   loadWorkspaceData,
   persistFixtureGraph,
@@ -11,6 +12,7 @@ import {
   type IntakeSnapshot,
   type MigrationWaveCreation,
   type ProjectWorkflow,
+  type RemediationPlan,
   type WorkspaceData,
 } from "./api";
 
@@ -121,6 +123,8 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
   const [migrationWave, setMigrationWave] = useState<MigrationWaveCreation | null>(null);
   const [migrationWaveError, setMigrationWaveError] = useState<string | null>(null);
   const [isCreatingMigrationWave, setIsCreatingMigrationWave] = useState(false);
+  const [remediationPlan, setRemediationPlan] = useState<RemediationPlan | null>(null);
+  const [remediationPlanError, setRemediationPlanError] = useState<string | null>(null);
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       {
@@ -286,8 +290,17 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
   async function handleCreateMigrationWave() {
     setIsCreatingMigrationWave(true);
     setMigrationWaveError(null);
+    setRemediationPlanError(null);
     try {
-      setMigrationWave(await createMigrationWave(selectedScope));
+      const wave = await createMigrationWave(selectedScope);
+      setMigrationWave(wave);
+      if (wave.blocked_count > 0) {
+        try {
+          setRemediationPlan(await createRemediationPlan(wave.selected_compute_nodes));
+        } catch {
+          setRemediationPlanError("Remediation planning failed");
+        }
+      }
     } catch {
       setMigrationWaveError("Migration wave creation failed");
     } finally {
@@ -496,11 +509,37 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
                 ))}
               </ul>
             ) : null}
+            {remediationPlan ? (
+              <>
+                <span className="workflow-lock">Remediation plan generated</span>
+                <dl className="workflow-facts workflow-facts--compact">
+                  <div>
+                    <dt>Plan</dt>
+                    <dd>{remediationPlan.plan_id}</dd>
+                  </div>
+                  <div>
+                    <dt>Tasks</dt>
+                    <dd>{remediationPlan.task_count}</dd>
+                  </div>
+                </dl>
+                <ul className="scope-list">
+                  {remediationPlan.tasks.map((task) => (
+                    <li key={task.task_id}>
+                      <strong>
+                        {task.target_name} / {task.rule_id}
+                      </strong>
+                      <small>{task.recommended_action}</small>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
           </article>
         </div>
         {intakeError ? <p className="error-message">{intakeError}</p> : null}
         {approvalError ? <p className="error-message">{approvalError}</p> : null}
         {migrationWaveError ? <p className="error-message">{migrationWaveError}</p> : null}
+        {remediationPlanError ? <p className="error-message">{remediationPlanError}</p> : null}
       </section>
 
       <section className="assessment-panel" aria-labelledby="assessment-title">

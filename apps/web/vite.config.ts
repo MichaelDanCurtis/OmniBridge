@@ -20,6 +20,7 @@ export default defineConfig({
       "/health": apiTarget,
       "/imports": apiTarget,
       "/migration-waves": apiTarget,
+      "/remediation-plans": apiTarget,
       "/validation": apiTarget,
       "/workspace": apiTarget,
     },

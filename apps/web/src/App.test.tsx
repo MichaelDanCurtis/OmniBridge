@@ -423,6 +423,44 @@ describe("App", () => {
         );
       }
 
+      if (path === "/remediation-plans/release1-demo" && init?.method === "POST") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              plan_id: "remediation-wave-001",
+              status: "consultant_review_required",
+              task_count: 2,
+              tasks: [
+                {
+                  task_id: "remediate-claims-db-01-vmware-snapshot-exists",
+                  target_name: "claims-db-01",
+                  rule_id: "vmware.snapshot.exists",
+                  severity: "blocker",
+                  owner_role: "VMware administrator",
+                  automation_mode: "human_approved_manual_step",
+                  approval_required: true,
+                  recommended_action:
+                    "Consolidate or remove VMware snapshots before replication.",
+                },
+                {
+                  task_id: "remediate-claims-db-01-vmware-tools-outdated",
+                  target_name: "claims-db-01",
+                  rule_id: "vmware.tools.outdated",
+                  severity: "warning",
+                  owner_role: "VMware administrator",
+                  automation_mode: "human_approved_manual_step",
+                  approval_required: false,
+                  recommended_action:
+                    "Repair or update VMware Tools before relying on guest metadata.",
+                },
+              ],
+              next_action: "Assign remediation tasks before test migration.",
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+
       return Promise.resolve(new Response("Not found", { status: 404 }));
     });
 
@@ -454,6 +492,10 @@ describe("App", () => {
     expect(await screen.findByText("Wave wave-001 staged")).toBeInTheDocument();
     expect(screen.getByText("Wave created")).toBeInTheDocument();
     expect(screen.getByText("Resolve blockers before test migration.")).toBeInTheDocument();
+    expect(await screen.findByText("Remediation plan generated")).toBeInTheDocument();
+    expect(
+      screen.getByText("Consolidate or remove VMware snapshots before replication."),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("5").length).toBeGreaterThan(0);
     expect(screen.getByText("$27,250")).toBeInTheDocument();
     expect(screen.getAllByText("$1,800").length).toBeGreaterThan(0);
@@ -517,6 +559,10 @@ describe("App", () => {
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "/migration-waves/release1-demo",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/remediation-plans/release1-demo",
       expect.objectContaining({ method: "POST" }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
