@@ -119,6 +119,30 @@ export type GraphIngestStatus = {
   neo4j_configured: boolean;
 };
 
+export type CollectorSnapshot = {
+  collector_id: string;
+  status: "not_deployed" | "connected";
+  vcenter: string;
+  last_heartbeat_at: string | null;
+};
+
+export type DiscoveryRunSnapshot = {
+  run_id: string | null;
+  status: "not_started" | "completed";
+  source: string;
+  compute_nodes: number;
+  network_segments: number;
+  graph_nodes: number;
+  graph_edges: number;
+  estimate_ready: boolean;
+};
+
+export type IntakeSnapshot = {
+  project_id: string;
+  collector: CollectorSnapshot;
+  discovery: DiscoveryRunSnapshot;
+};
+
 export type GraphImportResponse = {
   nodes: number;
   edges: number;
@@ -197,6 +221,7 @@ export type WorkspaceData = {
     vms: VmInventoryItem[];
   };
   graph_ingest: GraphIngestStatus;
+  intake: IntakeSnapshot;
   workflow: ProjectWorkflow;
   execution_plan: ExecutionPlan;
   validation_evidence: ValidationEvidence;
@@ -255,6 +280,30 @@ export async function persistFixtureGraph(): Promise<GraphImportResponse> {
   }
 
   return response.json() as Promise<GraphImportResponse>;
+}
+
+export async function deployCollector(): Promise<IntakeSnapshot> {
+  const response = await fetch("/collectors/release1-demo/deploy", {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Collector deployment failed: ${response.status}`);
+  }
+
+  return response.json() as Promise<IntakeSnapshot>;
+}
+
+export async function startDiscoveryRun(): Promise<IntakeSnapshot> {
+  const response = await fetch("/discovery-runs/release1-demo/start", {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Discovery run failed: ${response.status}`);
+  }
+
+  return response.json() as Promise<IntakeSnapshot>;
 }
 
 export async function approveGate(gate: string): Promise<ApprovalRecord> {

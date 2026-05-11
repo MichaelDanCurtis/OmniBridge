@@ -201,6 +201,8 @@ def test_workspace_endpoint_returns_consultant_workspace_sections() -> None:
     assert workspace["summary"]["blockers"] == 1
     assert workspace["summary"]["warnings"] == 1
     assert workspace["summary"]["total_storage_gb"] == 1280
+    assert workspace["intake"]["collector"]["status"] == "not_deployed"
+    assert workspace["intake"]["discovery"]["estimate_ready"] is False
     assert workspace["graph_ingest"] == {
         "source": "fixture",
         "node_count": 12,

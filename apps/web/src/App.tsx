@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   approveGate,
+  deployCollector,
   loadWorkspaceData,
   persistFixtureGraph,
+  startDiscoveryRun,
   type GraphIngestStatus,
+  type IntakeSnapshot,
   type ProjectWorkflow,
   type WorkspaceData,
 } from "./api";
@@ -16,8 +19,6 @@ type SummaryCard = {
   value: string;
   tone: "neutral" | "critical" | "warning";
 };
-
-type IngressState = "not_deployed" | "connected" | "collected";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -102,7 +103,7 @@ function WorkspaceError() {
 }
 
 function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
-  const [ingressState, setIngressState] = useState<IngressState>("not_deployed");
+  const [intake, setIntake] = useState<IntakeSnapshot>(data.intake);
   const [selectedScope, setSelectedScope] = useState<string[]>(
     data.target_design.vm_targets.map((target) => target.name),
   );
@@ -110,6 +111,9 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
   const [workflow, setWorkflow] = useState<ProjectWorkflow>(data.workflow);
   const [graphPersistError, setGraphPersistError] = useState<string | null>(null);
   const [isPersistingGraph, setIsPersistingGraph] = useState(false);
+  const [intakeError, setIntakeError] = useState<string | null>(null);
+  const [isDeployingCollector, setIsDeployingCollector] = useState(false);
+  const [isRunningDiscovery, setIsRunningDiscovery] = useState(false);
   const [approvalError, setApprovalError] = useState<string | null>(null);
   const [approvingGate, setApprovingGate] = useState<string | null>(null);
   const summaryCards = useMemo<SummaryCard[]>(
@@ -171,7 +175,7 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
     (approval) => approval.gate === "commercial_estimate_approval",
   );
   const isEstimateApproved = commercialEstimateApproval?.status === "approved";
-  const canReviewEstimate = ingressState === "collected";
+  const canReviewEstimate = intake.discovery.estimate_ready;
   const canSelectScope = canReviewEstimate && isEstimateApproved;
   const migrationCandidates = data.target_design.vm_targets.map((target) => {
     const inventory = data.inventory.vms.find((vm) => vm.name === target.name);
@@ -186,13 +190,45 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
     : graphIngest.neo4j_configured
       ? "Ready to persist"
       : "Neo4j not configured";
+  const collectorLabel =
+    intake.discovery.status === "completed"
+      ? "Discovery complete"
+      : intake.collector.status === "connected"
+        ? `Connected to ${intake.collector.vcenter}`
+        : "Collector not deployed";
+  const collectionLabel = intake.discovery.estimate_ready
+    ? `${intake.discovery.compute_nodes} VMs discovered`
+    : "Awaiting collection";
 
-  function handleDeployCollector() {
-    setIngressState("connected");
+  async function handleDeployCollector() {
+    setIsDeployingCollector(true);
+    setIntakeError(null);
+    try {
+      setIntake(await deployCollector());
+    } catch {
+      setIntakeError("Collector deployment failed");
+    } finally {
+      setIsDeployingCollector(false);
+    }
   }
 
-  function handleRunDataCollection() {
-    setIngressState("collected");
+  async function handleRunDataCollection() {
+    setIsRunningDiscovery(true);
+    setIntakeError(null);
+    try {
+      const snapshot = await startDiscoveryRun();
+      setIntake(snapshot);
+      setGraphIngest((current) => ({
+        ...current,
+        edge_count: snapshot.discovery.graph_edges,
+        node_count: snapshot.discovery.graph_nodes,
+        source: snapshot.discovery.source,
+      }));
+    } catch {
+      setIntakeError("Discovery run failed");
+    } finally {
+      setIsRunningDiscovery(false);
+    }
   }
 
   function handleToggleScope(name: string) {
@@ -271,39 +307,41 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
               </div>
               <div>
                 <dt>Collector</dt>
-                <dd>
-                  {ingressState === "not_deployed"
-                    ? "Collector not deployed"
-                    : ingressState === "connected"
-                      ? `Connected to ${data.project.source.vcenter}`
-                      : "Discovery complete"}
-                </dd>
+                <dd>{collectorLabel}</dd>
               </div>
               <div>
                 <dt>Collection</dt>
-                <dd>
-                  {ingressState === "collected"
-                    ? `${data.summary.compute_nodes} VMs discovered`
-                    : `${data.summary.compute_nodes} VMs available in fixture`}
-                </dd>
+                <dd>{collectionLabel}</dd>
               </div>
             </dl>
             <div className="workflow-actions">
               <button
                 className="primary-action"
-                disabled={ingressState !== "not_deployed"}
-                onClick={handleDeployCollector}
+                disabled={intake.collector.status !== "not_deployed" || isDeployingCollector}
+                onClick={() => void handleDeployCollector()}
                 type="button"
               >
-                {ingressState === "not_deployed" ? "Deploy collector" : "Collector deployed"}
+                {intake.collector.status === "not_deployed"
+                  ? isDeployingCollector
+                    ? "Deploying..."
+                    : "Deploy collector"
+                  : "Collector deployed"}
               </button>
               <button
                 className="secondary-action"
-                disabled={ingressState === "not_deployed" || ingressState === "collected"}
-                onClick={handleRunDataCollection}
+                disabled={
+                  intake.collector.status === "not_deployed" ||
+                  intake.discovery.estimate_ready ||
+                  isRunningDiscovery
+                }
+                onClick={() => void handleRunDataCollection()}
                 type="button"
               >
-                {ingressState === "collected" ? "Collection complete" : "Run data collection"}
+                {intake.discovery.estimate_ready
+                  ? "Collection complete"
+                  : isRunningDiscovery
+                    ? "Collecting..."
+                    : "Run data collection"}
               </button>
             </div>
           </article>
@@ -401,6 +439,7 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
             </div>
           </article>
         </div>
+        {intakeError ? <p className="error-message">{intakeError}</p> : null}
         {approvalError ? <p className="error-message">{approvalError}</p> : null}
       </section>
 

@@ -5,6 +5,7 @@ from typing import Any
 
 from omnibridge_agent_tools.models import AnalysisResult
 from omnibridge_agent_tools.analysis_workflow import run_fixture_analysis
+from omnibridge_api.intake_state import get_release1_intake_snapshot
 from omnibridge_api.settings import settings
 from omnibridge_azure_migrate_adapter import (
     AzureMigrateMachineRef,
@@ -292,6 +293,7 @@ def _build_workspace(
             "warnings": warning_count,
             "total_storage_gb": _storage_gb(fixture),
         },
+        "intake": get_release1_intake_snapshot().model_dump(mode="json"),
         "application": {
             "name": APPLICATION_NAME,
             "members": list(blueprint.compute_node_names),

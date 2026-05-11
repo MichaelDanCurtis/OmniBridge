@@ -40,6 +40,25 @@ describe("App", () => {
         persisted: false,
         neo4j_configured: false,
       },
+      intake: {
+        project_id: "project-acme-vmware-azure",
+        collector: {
+          collector_id: "collector-release1-demo",
+          status: "not_deployed",
+          vcenter: "vcsa-prod-01",
+          last_heartbeat_at: null,
+        },
+        discovery: {
+          run_id: null,
+          status: "not_started",
+          source: "fixture",
+          compute_nodes: 0,
+          network_segments: 0,
+          graph_nodes: 0,
+          graph_edges: 0,
+          estimate_ready: false,
+        },
+      },
       workflow: {
         state: "BLUEPRINT_GENERATED",
         pending_approval_count: 6,
@@ -315,6 +334,48 @@ describe("App", () => {
         );
       }
 
+      if (path === "/collectors/release1-demo/deploy" && init?.method === "POST") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ...workspaceResponse.intake,
+              collector: {
+                ...workspaceResponse.intake.collector,
+                status: "connected",
+                last_heartbeat_at: "2026-05-10T12:00:00Z",
+              },
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+
+      if (path === "/discovery-runs/release1-demo/start" && init?.method === "POST") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ...workspaceResponse.intake,
+              collector: {
+                ...workspaceResponse.intake.collector,
+                status: "connected",
+                last_heartbeat_at: "2026-05-10T12:00:00Z",
+              },
+              discovery: {
+                run_id: "discovery-release1-demo-001",
+                status: "completed",
+                source: "fixture",
+                compute_nodes: 3,
+                network_segments: 3,
+                graph_nodes: 12,
+                graph_edges: 13,
+                estimate_ready: true,
+              },
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+
       if (
         path === "/approvals/release1-demo/commercial_estimate_approval/approve" &&
         init?.method === "POST"
@@ -350,9 +411,9 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "Migration scope" })).toBeInTheDocument();
     expect(screen.getByText("Locked until estimate approval")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Deploy collector" }));
-    expect(screen.getByText("Connected to vcsa-prod-01")).toBeInTheDocument();
+    expect(await screen.findByText("Connected to vcsa-prod-01")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Run data collection" }));
-    expect(screen.getByText("Discovery complete")).toBeInTheDocument();
+    expect(await screen.findByText("Discovery complete")).toBeInTheDocument();
     expect(screen.getByText("3 VMs discovered")).toBeInTheDocument();
     expect(screen.getByText("$27,250 project fee")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Approve estimate package" }));
@@ -415,6 +476,14 @@ describe("App", () => {
     );
 
     expect(fetchMock).toHaveBeenCalledWith("/workspace/release1-demo");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/collectors/release1-demo/deploy",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/discovery-runs/release1-demo/start",
+      expect.objectContaining({ method: "POST" }),
+    );
     expect(fetchMock).toHaveBeenCalledWith(
       "/imports/vmware-fixture",
       expect.objectContaining({ method: "POST" }),
