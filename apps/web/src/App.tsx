@@ -5,6 +5,8 @@ import {
   createMigrationWave,
   createRemediationPlan,
   deployCollector,
+  loadCurrentMigrationWave,
+  loadApprovals,
   loadWorkspaceData,
   persistFixtureGraph,
   startDiscoveryRun,
@@ -208,6 +210,47 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
   const collectionLabel = intake.discovery.estimate_ready
     ? `${intake.discovery.compute_nodes} VMs discovered`
     : "Awaiting collection";
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function restoreWorkflow() {
+      try {
+        const liveWorkflow = await loadApprovals();
+        if (isMounted) {
+          setWorkflow(liveWorkflow);
+        }
+      } catch {
+        // The workspace payload still provides a safe initial ledger fallback.
+      }
+    }
+
+    async function restoreCurrentWave() {
+      try {
+        const currentWave = await loadCurrentMigrationWave();
+        if (!isMounted || currentWave.wave_id === null) {
+          return;
+        }
+
+        setMigrationWave(currentWave);
+        if (currentWave.blocked_count > 0) {
+          const plan = await createRemediationPlan(currentWave.selected_compute_nodes);
+          if (isMounted) {
+            setRemediationPlan(plan);
+          }
+        }
+      } catch {
+        // A missing current wave should not block the initial workspace render.
+      }
+    }
+
+    void restoreWorkflow();
+    void restoreCurrentWave();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   async function handleDeployCollector() {
     setIsDeployingCollector(true);

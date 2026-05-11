@@ -326,6 +326,10 @@ describe("App", () => {
         return Promise.resolve(new Response(JSON.stringify(workspaceResponse), { status: 200 }));
       }
 
+      if (path === "/approvals/release1-demo" && init === undefined) {
+        return Promise.resolve(new Response(JSON.stringify(workspaceResponse.workflow), { status: 200 }));
+      }
+
       if (path === "/imports/vmware-fixture" && init?.method === "POST") {
         return Promise.resolve(
           new Response(JSON.stringify({ nodes: 12, edges: 13, persisted: true }), {
@@ -549,6 +553,7 @@ describe("App", () => {
     );
 
     expect(fetchMock).toHaveBeenCalledWith("/workspace/release1-demo");
+    expect(fetchMock).toHaveBeenCalledWith("/approvals/release1-demo");
     expect(fetchMock).toHaveBeenCalledWith(
       "/collectors/release1-demo/deploy",
       expect.objectContaining({ method: "POST" }),

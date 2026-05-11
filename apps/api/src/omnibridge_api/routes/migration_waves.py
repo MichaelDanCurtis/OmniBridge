@@ -1,3 +1,5 @@
+from threading import Lock
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -20,7 +22,7 @@ class MigrationWaveBlocker(BaseModel):
 
 
 class MigrationWaveResponse(BaseModel):
-    wave_id: str
+    wave_id: str | None
     status: str
     selected_compute_nodes: list[str]
     execution_backend: str
@@ -30,6 +32,25 @@ class MigrationWaveResponse(BaseModel):
     blocked_count: int
     blockers: list[MigrationWaveBlocker]
     next_action: str
+
+
+_release1_wave_lock = Lock()
+_release1_current_wave = None
+
+
+def reset_release1_migration_wave_state() -> None:
+    global _release1_current_wave
+    with _release1_wave_lock:
+        _release1_current_wave = None
+
+
+@router.get("/release1-demo/current")
+def current_release1_demo_migration_wave() -> dict[str, object]:
+    with _release1_wave_lock:
+        if _release1_current_wave is None:
+            return _empty_release1_wave().model_dump(mode="json")
+
+        return _release1_current_wave.model_dump(mode="json")
 
 
 @router.post("/release1-demo")
@@ -84,7 +105,26 @@ def create_release1_demo_migration_wave(
         ),
     )
 
+    global _release1_current_wave
+    with _release1_wave_lock:
+        _release1_current_wave = response
+
     return response.model_dump(mode="json")
+
+
+def _empty_release1_wave() -> MigrationWaveResponse:
+    return MigrationWaveResponse(
+        wave_id=None,
+        status="not_created",
+        selected_compute_nodes=[],
+        execution_backend="azure-migrate",
+        operation_count=0,
+        approval_gates=[],
+        ready_count=0,
+        blocked_count=0,
+        blockers=[],
+        next_action="Create a migration wave.",
+    )
 
 
 def _release1_wave_blockers(

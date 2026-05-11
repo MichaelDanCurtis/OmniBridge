@@ -163,7 +163,7 @@ export type ProjectWorkflow = {
 };
 
 export type MigrationWaveCreation = {
-  wave_id: string;
+  wave_id: string | null;
   status: string;
   selected_compute_nodes: string[];
   execution_backend: string;
@@ -297,6 +297,10 @@ export async function loadWorkspaceData(): Promise<WorkspaceData> {
   return requestJson<WorkspaceData>("/workspace/release1-demo");
 }
 
+export async function loadApprovals(): Promise<ProjectWorkflow> {
+  return requestJson<ProjectWorkflow>("/approvals/release1-demo");
+}
+
 export async function persistFixtureGraph(): Promise<GraphImportResponse> {
   const response = await fetch("/imports/vmware-fixture", {
     body: JSON.stringify({
@@ -358,6 +362,10 @@ export async function createMigrationWave(
   }
 
   return response.json() as Promise<MigrationWaveCreation>;
+}
+
+export async function loadCurrentMigrationWave(): Promise<MigrationWaveCreation> {
+  return requestJson<MigrationWaveCreation>("/migration-waves/release1-demo/current");
 }
 
 export async function createRemediationPlan(

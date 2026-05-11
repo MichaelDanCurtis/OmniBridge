@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from omnibridge_api.intake_state import reset_release1_intake_state
 from omnibridge_api.main import app
 from omnibridge_api.routes import approvals as approvals_routes
+from omnibridge_api.routes import migration_waves as migration_waves_routes
 from omnibridge_workflow_engine.models import ApprovalLedger
 
 
@@ -13,9 +14,13 @@ from omnibridge_workflow_engine.models import ApprovalLedger
 def release1_workflow_state() -> Iterator[None]:
     reset_release1_intake_state()
     approvals_routes._release1_ledger = ApprovalLedger.seed_release1()
+    if hasattr(migration_waves_routes, "reset_release1_migration_wave_state"):
+        migration_waves_routes.reset_release1_migration_wave_state()
     yield
     reset_release1_intake_state()
     approvals_routes._release1_ledger = ApprovalLedger.seed_release1()
+    if hasattr(migration_waves_routes, "reset_release1_migration_wave_state"):
+        migration_waves_routes.reset_release1_migration_wave_state()
 
 
 def _complete_discovery(client: TestClient) -> None:
@@ -31,6 +36,26 @@ def _approve_estimate(client: TestClient) -> None:
             "reason": "Customer approved the estimate.",
         },
     )
+
+
+def test_current_migration_wave_starts_empty() -> None:
+    client = TestClient(app)
+
+    response = client.get("/migration-waves/release1-demo/current")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "wave_id": None,
+        "status": "not_created",
+        "selected_compute_nodes": [],
+        "execution_backend": "azure-migrate",
+        "operation_count": 0,
+        "approval_gates": [],
+        "ready_count": 0,
+        "blocked_count": 0,
+        "blockers": [],
+        "next_action": "Create a migration wave.",
+    }
 
 
 def test_migration_wave_requires_discovery_and_estimate_approval() -> None:
@@ -90,6 +115,11 @@ def test_create_migration_wave_returns_execution_ready_scope_after_approval() ->
         }
     ]
     assert payload["next_action"] == "Resolve blockers before test migration."
+
+    current_response = client.get("/migration-waves/release1-demo/current")
+
+    assert current_response.status_code == 200
+    assert current_response.json() == payload
 
 
 def test_create_migration_wave_rejects_unknown_compute_nodes() -> None:
