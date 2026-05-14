@@ -142,7 +142,7 @@ def bootstrap_release1_collector() -> CollectorBootstrapResponse:
         registration_token=registration_token,
         api_url=settings.api_public_url,
         install_command=(
-            "omnibridge-collector register "
+            "omnibridge-collector run "
             f"--api-url {settings.api_public_url} "
             f"--collector-id {_RELEASE1_COLLECTOR_ID} "
             f"--registration-token {registration_token}"
@@ -191,7 +191,7 @@ def start_release1_discovery_run() -> IntakeSnapshot:
         status=DiscoveryRunStatus.QUEUED,
         collector_id=None,
         result={
-            "source": "fixture",
+            "source": "collector",
             "estimate_ready": False,
         },
     )
@@ -248,7 +248,7 @@ def complete_release1_collector_job(
 
 def release1_fixture_discovery_result() -> dict[str, object]:
     return {
-        "source": "fixture",
+        "source": "collector",
         "compute_nodes": 3,
         "network_segments": 3,
         "graph_nodes": 12,
@@ -313,7 +313,10 @@ def _job_from_run(run: StoredRun) -> CollectorJob:
         job_id=run.run_id,
         job_type=run.run_type,
         status=run.status,
-        parameters={"source": str(run.result.get("source", "fixture"))},
+        parameters={
+            "source": str(run.result.get("source", "collector")),
+            "fixture_path": "corridors/vmware-to-azure/fixtures/release1-small-estate.json",
+        },
     )
 
 

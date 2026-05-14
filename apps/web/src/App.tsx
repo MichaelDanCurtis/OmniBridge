@@ -163,9 +163,13 @@ function WorkspaceError({ onThemeChange, theme }: WorkspaceThemeProps) {
 
 function WorkspaceLoaded({
   data,
+  onWorkspaceDataChange,
   onThemeChange,
   theme,
-}: { data: WorkspaceData } & WorkspaceThemeProps) {
+}: {
+  data: WorkspaceData;
+  onWorkspaceDataChange: (data: WorkspaceData) => void;
+} & WorkspaceThemeProps) {
   const [intake, setIntake] = useState<IntakeSnapshot>(data.intake);
   const [selectedScope, setSelectedScope] = useState<string[]>(
     data.target_design.vm_targets.map((target) => target.name),
@@ -370,6 +374,11 @@ function WorkspaceLoaded({
     setIntakeError(null);
     try {
       const snapshot = await loadLatestDiscoveryRun();
+      if (snapshot.discovery.status === "completed" && snapshot.discovery.estimate_ready) {
+        await refreshWorkspaceData();
+        return;
+      }
+
       setIntake(snapshot);
       if (snapshot.discovery.status === "completed") {
         setGraphIngest((current) => ({
@@ -391,6 +400,11 @@ function WorkspaceLoaded({
     setIntakeError(null);
     try {
       const snapshot = await startDiscoveryRun();
+      if (snapshot.discovery.status === "completed" && snapshot.discovery.estimate_ready) {
+        await refreshWorkspaceData();
+        return;
+      }
+
       setIntake(snapshot);
       if (snapshot.discovery.status === "completed") {
         setGraphIngest((current) => ({
@@ -404,6 +418,17 @@ function WorkspaceLoaded({
       setIntakeError("Discovery run failed");
     } finally {
       setIsRunningDiscovery(false);
+    }
+  }
+
+  async function refreshWorkspaceData() {
+    const refreshedData = await loadWorkspaceData();
+    onWorkspaceDataChange(refreshedData);
+    setIntake(refreshedData.intake);
+    setGraphIngest(refreshedData.graph_ingest);
+    setWorkflow(refreshedData.workflow);
+    if (migrationWave === null) {
+      setSelectedScope(refreshedData.target_design.vm_targets.map((target) => target.name));
     }
   }
 
@@ -1300,5 +1325,12 @@ export default function App() {
     return <WorkspaceLoading onThemeChange={handleThemeChange} theme={theme} />;
   }
 
-  return <WorkspaceLoaded data={data} onThemeChange={handleThemeChange} theme={theme} />;
+  return (
+    <WorkspaceLoaded
+      data={data}
+      onThemeChange={handleThemeChange}
+      onWorkspaceDataChange={setData}
+      theme={theme}
+    />
+  );
 }

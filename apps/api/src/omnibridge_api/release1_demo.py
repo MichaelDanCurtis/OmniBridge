@@ -26,15 +26,11 @@ from omnibridge_estimator.models import CommercialEstimate
 from omnibridge_estimator.vmware_to_azure import estimate_vmware_to_azure
 from omnibridge_rules_engine.models import ReadinessFinding
 from omnibridge_rules_engine.vmware_readiness import evaluate_vmware_vm
+from omnibridge_api.routes.approvals import get_release1_workflow_snapshot
 from omnibridge_validation_engine.models import ValidationEvidence
 from omnibridge_validation_engine.vmware_to_azure import build_release1_validation_evidence
 from omnibridge_vmware_to_azure.fixture_loader import load_fixture
 from omnibridge_vmware_to_azure.mapper import MappedGraph, map_fixture_to_graph
-from omnibridge_workflow_engine.models import (
-    ApprovalLedger,
-    ProjectWorkflowSnapshot,
-    WorkflowState,
-)
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -242,6 +238,15 @@ def _build_workspace(
         for network in fixture["networks"]
     ]
     vms: list[dict[str, Any]] = []
+    intake_snapshot = get_release1_intake_snapshot()
+    discovery = intake_snapshot.discovery
+    graph_ingest_source = discovery.source if discovery.estimate_ready else "fixture"
+    graph_ingest_node_count = (
+        discovery.graph_nodes if discovery.estimate_ready else len(graph.nodes)
+    )
+    graph_ingest_edge_count = (
+        discovery.graph_edges if discovery.estimate_ready else len(graph.edges)
+    )
 
     for vm in fixture["vms"]:
         vm_id = f"vm:{vm['moid']}"
@@ -293,7 +298,7 @@ def _build_workspace(
             "warnings": warning_count,
             "total_storage_gb": _storage_gb(fixture),
         },
-        "intake": get_release1_intake_snapshot().model_dump(mode="json"),
+        "intake": intake_snapshot.model_dump(mode="json"),
         "application": {
             "name": APPLICATION_NAME,
             "members": list(blueprint.compute_node_names),
@@ -305,16 +310,13 @@ def _build_workspace(
             "vms": vms,
         },
         "graph_ingest": {
-            "source": "fixture",
-            "node_count": len(graph.nodes),
-            "edge_count": len(graph.edges),
+            "source": graph_ingest_source,
+            "node_count": graph_ingest_node_count,
+            "edge_count": graph_ingest_edge_count,
             "persisted": False,
             "neo4j_configured": bool(settings.neo4j_uri and settings.neo4j_password),
         },
-        "workflow": ProjectWorkflowSnapshot(
-            state=WorkflowState.BLUEPRINT_GENERATED,
-            approvals=ApprovalLedger.seed_release1().records,
-        ).model_dump(mode="json"),
+        "workflow": get_release1_workflow_snapshot().model_dump(mode="json"),
         "execution_plan": execution_plan.model_dump(mode="json"),
         "validation_evidence": validation_evidence.model_dump(mode="json"),
         "topology": _build_topology(graph),

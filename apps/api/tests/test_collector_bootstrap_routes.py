@@ -27,7 +27,8 @@ def test_collector_bootstrap_creates_pending_registration_package() -> None:
     assert payload["registration"]["collector_id"] == "collector-release1-demo"
     assert len(payload["registration"]["registration_token"]) >= 24
     assert payload["registration"]["api_url"] == "http://127.0.0.1:8001"
-    assert "omnibridge-collector register" in payload["registration"]["install_command"]
+    assert "omnibridge-collector run" in payload["registration"]["install_command"]
+    assert "--api-url http://127.0.0.1:8001" in payload["registration"]["install_command"]
 
 
 def test_collector_registers_with_bootstrap_token_and_then_heartbeats() -> None:
@@ -176,6 +177,39 @@ def test_registered_collector_claim_with_no_work_returns_null_job() -> None:
     payload = response.json()
     assert payload["collector"]["status"] == "online"
     assert payload["job"] is None
+
+
+def test_queued_discovery_job_is_labeled_as_collector_sourced_work() -> None:
+    client = TestClient(app)
+    bootstrap = client.post("/collectors/release1-demo/bootstrap").json()
+    registration_token = bootstrap["registration"]["registration_token"]
+    client.post(
+        "/collectors/release1-demo/register",
+        json={
+            "collector_id": "collector-release1-demo",
+            "registration_token": registration_token,
+            "version": "0.1.0",
+            "capabilities": ["fixture_discovery", "heartbeat"],
+        },
+    )
+
+    queued_response = client.post("/discovery-runs/release1-demo/start")
+    claim_response = client.post(
+        "/collectors/collector-release1-demo/jobs/claim",
+        json={
+            "registration_token": registration_token,
+            "version": "0.1.0",
+            "capabilities": ["fixture_discovery", "heartbeat"],
+        },
+    )
+
+    assert queued_response.status_code == 200
+    assert queued_response.json()["discovery"]["source"] == "collector"
+    assert claim_response.status_code == 200
+    assert claim_response.json()["job"]["parameters"] == {
+        "source": "collector",
+        "fixture_path": "corridors/vmware-to-azure/fixtures/release1-small-estate.json",
+    }
 
 
 def test_collector_job_claim_rejects_invalid_token() -> None:

@@ -15,6 +15,9 @@ describe("App", () => {
   });
 
   it("renders the consultant workspace from Release 1 API data", async () => {
+    let estimateApproved = false;
+    let workspaceReloadFails = false;
+    let workspaceRequestCount = 0;
     let latestDiscoveryRequestCount = 0;
     const workspaceResponse = {
       project: {
@@ -324,15 +327,71 @@ describe("App", () => {
         },
       ],
     };
+    const discoveredWorkspaceResponse = () => ({
+      ...workspaceResponse,
+      graph_ingest: {
+        ...workspaceResponse.graph_ingest,
+        source: "collector",
+      },
+      intake: {
+        ...workspaceResponse.intake,
+        collector: {
+          ...workspaceResponse.intake.collector,
+          status: "online",
+          last_heartbeat_at: "2026-05-11T12:00:00Z",
+          version: "0.1.0",
+          capabilities: ["fixture_discovery", "heartbeat"],
+        },
+        discovery: {
+          run_id: "discovery-release1-demo-001",
+          status: "completed",
+          source: "collector",
+          compute_nodes: 3,
+          network_segments: 3,
+          graph_nodes: 12,
+          graph_edges: 13,
+          estimate_ready: true,
+        },
+      },
+      workflow: estimateApproved
+        ? {
+            ...workspaceResponse.workflow,
+            pending_approval_count: 5,
+            approvals: workspaceResponse.workflow.approvals.map((approval) =>
+              approval.gate === "commercial_estimate_approval"
+                ? {
+                    gate: "commercial_estimate_approval",
+                    status: "approved",
+                    actor: "consultant@example.com",
+                    reason: "Approved from Consultant Workspace.",
+                  }
+                : approval,
+            ),
+          }
+        : workspaceResponse.workflow,
+    });
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
       const path = input.toString();
 
       if (path === "/workspace/release1-demo") {
-        return Promise.resolve(new Response(JSON.stringify(workspaceResponse), { status: 200 }));
+        workspaceRequestCount += 1;
+        if (workspaceRequestCount > 1 && workspaceReloadFails) {
+          return Promise.resolve(new Response("Unavailable", { status: 503 }));
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              workspaceRequestCount === 1 ? workspaceResponse : discoveredWorkspaceResponse(),
+            ),
+            { status: 200 },
+          ),
+        );
       }
 
       if (path === "/approvals/release1-demo" && init === undefined) {
-        return Promise.resolve(new Response(JSON.stringify(workspaceResponse.workflow), { status: 200 }));
+        return Promise.resolve(
+          new Response(JSON.stringify(discoveredWorkspaceResponse().workflow), { status: 200 }),
+        );
       }
 
       if (path === "/imports/vmware-fixture" && init?.method === "POST") {
@@ -356,7 +415,7 @@ describe("App", () => {
                 api_url: "http://127.0.0.1:8001",
                 collector_id: "collector-release1-demo",
                 install_command:
-                  "omnibridge-collector register --api-url http://127.0.0.1:8001 --collector-id collector-release1-demo --registration-token token-abc",
+                  "omnibridge-collector run --api-url http://127.0.0.1:8001 --collector-id collector-release1-demo --registration-token token-abc",
                 registration_token: "token-abc",
               },
             }),
@@ -374,7 +433,7 @@ describe("App", () => {
               ? {
                   run_id: "discovery-release1-demo-001",
                   status: "running",
-                  source: "fixture",
+                  source: "collector",
                   compute_nodes: 0,
                   network_segments: 0,
                   graph_nodes: 0,
@@ -384,7 +443,7 @@ describe("App", () => {
               : {
                   run_id: "discovery-release1-demo-001",
                   status: "completed",
-                  source: "fixture",
+                  source: "collector",
                   compute_nodes: 3,
                   network_segments: 3,
                   graph_nodes: 12,
@@ -424,7 +483,7 @@ describe("App", () => {
               discovery: {
                 run_id: "discovery-release1-demo-001",
                 status: "queued",
-                source: "fixture",
+                source: "collector",
                 compute_nodes: 0,
                 network_segments: 0,
                 graph_nodes: 0,
@@ -441,6 +500,7 @@ describe("App", () => {
         path === "/approvals/release1-demo/commercial_estimate_approval/approve" &&
         init?.method === "POST"
       ) {
+        estimateApproved = true;
         return Promise.resolve(
           new Response(
             JSON.stringify({
@@ -541,7 +601,7 @@ describe("App", () => {
     expect(screen.getByText("Locked until estimate approval")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Generate bootstrap" }));
     expect(await screen.findByText("Waiting for collector registration")).toBeInTheDocument();
-    expect(screen.getByText("omnibridge-collector register --api-url http://127.0.0.1:8001 --collector-id collector-release1-demo --registration-token token-abc")).toBeInTheDocument();
+    expect(screen.getByText("omnibridge-collector run --api-url http://127.0.0.1:8001 --collector-id collector-release1-demo --registration-token token-abc")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
     expect(await screen.findByText("Online at 2026-05-11T12:00:00Z")).toBeInTheDocument();
     expect(screen.getByText("Ready to queue discovery")).toBeInTheDocument();
@@ -551,12 +611,23 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
     expect(await screen.findByText("Collector running discovery")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Discovery results locked" })).toBeInTheDocument();
+    workspaceReloadFails = true;
     fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
-    expect(await screen.findByText("3 VMs discovered from fixture")).toBeInTheDocument();
+    expect(await screen.findByText("Collector status refresh failed")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Discovery results locked" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Claims Portal" })).not.toBeInTheDocument();
+    workspaceReloadFails = false;
+    fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
+    expect(await screen.findByText("3 VMs discovered from collector")).toBeInTheDocument();
+    await waitFor(() => expect(workspaceRequestCount).toBe(3));
     expect(screen.getByRole("heading", { name: "Claims Portal" })).toBeInTheDocument();
     expect(screen.getByText("$27,250 project fee")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Approve estimate package" }));
     expect(await screen.findByText("5 pending")).toBeInTheDocument();
+    expect(screen.getByText("Estimate approved")).toBeInTheDocument();
+    expect(screen.getByText("1 VM selected for wave-001")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
+    await waitFor(() => expect(workspaceRequestCount).toBe(4));
     expect(screen.getByText("Estimate approved")).toBeInTheDocument();
     expect(screen.getByText("1 VM selected for wave-001")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Create migration wave" }));

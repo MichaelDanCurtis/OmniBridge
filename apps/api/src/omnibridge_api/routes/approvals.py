@@ -18,7 +18,7 @@ class ApprovalRequest(BaseModel):
     reason: str
 
 
-def _release1_snapshot() -> ProjectWorkflowSnapshot:
+def get_release1_workflow_snapshot() -> ProjectWorkflowSnapshot:
     return ProjectWorkflowSnapshot(
         state=WorkflowState.BLUEPRINT_GENERATED,
         approvals=_release1_ledger.records,
@@ -34,7 +34,7 @@ def is_release1_gate_approved(gate: str) -> bool:
 
 @router.get("/release1-demo")
 def release1_demo_approvals() -> dict[str, object]:
-    return _release1_snapshot().model_dump(mode="json")
+    return get_release1_workflow_snapshot().model_dump(mode="json")
 
 
 @router.post("/release1-demo/{gate}/approve")

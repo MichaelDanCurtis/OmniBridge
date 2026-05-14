@@ -1,8 +1,23 @@
+from collections.abc import Iterator
+
+import pytest
 from fastapi.testclient import TestClient
 
+from omnibridge_api.intake_state import reset_release1_intake_state
 from omnibridge_api.main import app
+from omnibridge_api.routes import approvals as approvals_routes
 from omnibridge_api.routes.analysis import get_analysis_graph_repository
 from omnibridge_canonical_graph.models import GraphTopologyEdge, ProjectTopology
+from omnibridge_workflow_engine.models import ApprovalLedger
+
+
+@pytest.fixture(autouse=True)
+def release1_route_state() -> Iterator[None]:
+    reset_release1_intake_state()
+    approvals_routes._release1_ledger = ApprovalLedger.seed_release1()
+    yield
+    reset_release1_intake_state()
+    approvals_routes._release1_ledger = ApprovalLedger.seed_release1()
 
 
 class FakeAnalysisGraphRepository:
@@ -245,4 +260,86 @@ def test_workspace_endpoint_returns_consultant_workspace_sections() -> None:
         "label": "Terraform draft",
         "href": "/artifacts/release1-main.tf",
         "kind": "terraform",
+    }
+
+
+def test_workspace_endpoint_reflects_completed_collector_graph_ingest() -> None:
+    reset_release1_intake_state()
+    client = TestClient(app)
+
+    try:
+        bootstrap = client.post("/collectors/release1-demo/bootstrap").json()
+        registration_token = bootstrap["registration"]["registration_token"]
+        client.post(
+            "/collectors/release1-demo/register",
+            json={
+                "collector_id": "collector-release1-demo",
+                "registration_token": registration_token,
+                "version": "0.1.0",
+                "capabilities": ["fixture_discovery", "heartbeat"],
+            },
+        )
+        client.post("/discovery-runs/release1-demo/start")
+        client.post(
+            "/collectors/collector-release1-demo/jobs/claim",
+            json={
+                "registration_token": registration_token,
+                "version": "0.1.0",
+                "capabilities": ["fixture_discovery", "heartbeat"],
+            },
+        )
+        client.post(
+            "/collectors/collector-release1-demo/jobs/discovery-release1-demo-001/complete",
+            json={
+                "registration_token": registration_token,
+                "version": "0.1.0",
+                "capabilities": ["fixture_discovery", "heartbeat"],
+                "result": {
+                    "source": "collector",
+                    "compute_nodes": 3,
+                    "network_segments": 3,
+                    "graph_nodes": 12,
+                    "graph_edges": 13,
+                    "estimate_ready": True,
+                },
+            },
+        )
+
+        response = client.get("/workspace/release1-demo")
+    finally:
+        reset_release1_intake_state()
+
+    assert response.status_code == 200
+    workspace = response.json()
+    assert workspace["intake"]["discovery"]["status"] == "completed"
+    assert workspace["graph_ingest"]["source"] == "collector"
+    assert workspace["graph_ingest"]["node_count"] == 12
+    assert workspace["graph_ingest"]["edge_count"] == 13
+
+
+def test_workspace_endpoint_reflects_live_approval_ledger() -> None:
+    approvals_routes._release1_ledger = ApprovalLedger.seed_release1()
+    client = TestClient(app)
+
+    try:
+        approve_response = client.post(
+            "/approvals/release1-demo/commercial_estimate_approval/approve",
+            json={
+                "actor": "consultant@example.com",
+                "reason": "Customer approved the estimate.",
+            },
+        )
+        workspace_response = client.get("/workspace/release1-demo")
+    finally:
+        approvals_routes._release1_ledger = ApprovalLedger.seed_release1()
+
+    assert approve_response.status_code == 200
+    assert workspace_response.status_code == 200
+    workflow = workspace_response.json()["workflow"]
+    assert workflow["pending_approval_count"] == 5
+    assert workflow["approvals"][0] == {
+        "gate": "commercial_estimate_approval",
+        "status": "approved",
+        "actor": "consultant@example.com",
+        "reason": "Customer approved the estimate.",
     }

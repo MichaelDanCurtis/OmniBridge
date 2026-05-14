@@ -85,7 +85,7 @@ def test_collector_registration_and_discovery_run_unlock_estimate_data() -> None
     assert queued["discovery"] == {
         "run_id": "discovery-release1-demo-001",
         "status": "queued",
-        "source": "fixture",
+        "source": "collector",
         "compute_nodes": 0,
         "network_segments": 0,
         "graph_nodes": 0,
@@ -108,7 +108,10 @@ def test_collector_registration_and_discovery_run_unlock_estimate_data() -> None
         "job_id": "discovery-release1-demo-001",
         "job_type": "discovery",
         "status": "running",
-        "parameters": {"source": "fixture"},
+        "parameters": {
+            "source": "collector",
+            "fixture_path": "corridors/vmware-to-azure/fixtures/release1-small-estate.json",
+        },
     }
 
     complete_response = client.post(
@@ -118,7 +121,7 @@ def test_collector_registration_and_discovery_run_unlock_estimate_data() -> None
             "version": "0.1.0",
             "capabilities": ["fixture_discovery", "heartbeat"],
             "result": {
-                "source": "fixture",
+                "source": "collector",
                 "compute_nodes": 3,
                 "network_segments": 3,
                 "graph_nodes": 12,
@@ -134,7 +137,7 @@ def test_collector_registration_and_discovery_run_unlock_estimate_data() -> None
     assert completed["discovery"] == {
         "run_id": "discovery-release1-demo-001",
         "status": "completed",
-        "source": "fixture",
+        "source": "collector",
         "compute_nodes": 3,
         "network_segments": 3,
         "graph_nodes": 12,
