@@ -39,10 +39,10 @@ from omnibridge_workflow_engine.models import (
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_RELEASE1_FIXTURE_PATH = (
-    _REPO_ROOT / "corridors" / "vmware-to-azure" / "fixtures" / "acme-small-estate.json"
+    _REPO_ROOT / "corridors" / "vmware-to-azure" / "fixtures" / "release1-small-estate.json"
 )
 APPLICATION_NAME = "Claims Portal"
-PROJECT_NAME = "ACME VMware-to-Azure Assessment"
+PROJECT_NAME = "OmniBridge VMware-to-Azure Assessment"
 
 
 @dataclass(frozen=True)
@@ -170,7 +170,7 @@ def _disk_type(vm: dict[str, Any], target_subnet: str) -> str:
 
 def _target_subnet_id(target_subnet: str) -> str:
     return (
-        "/subscriptions/sub-acme-prod/resourceGroups/rg-network/providers/"
+        "/subscriptions/sub-omnibridge-prod/resourceGroups/rg-network/providers/"
         f"Microsoft.Network/virtualNetworks/vnet-prod/subnets/{target_subnet}"
     )
 
@@ -194,9 +194,9 @@ def _build_execution_plan(fixture: dict[str, Any]) -> AzureMigrateOperationPlan:
 
     return AzureMigrateOperationPlanner().plan_agentless_vmware_wave(
         project=AzureMigrateProjectRef(
-            subscription_id="sub-acme-prod",
+            subscription_id="sub-omnibridge-prod",
             resource_group="rg-migrate-prod",
-            project_name="omni-acme-release1",
+            project_name="omnibridge-release1",
             region="westus2",
         ),
         wave_id="wave-001",

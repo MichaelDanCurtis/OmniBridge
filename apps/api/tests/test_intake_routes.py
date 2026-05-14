@@ -21,7 +21,7 @@ def test_latest_discovery_run_starts_with_collector_not_deployed() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["project_id"] == "project-acme-vmware-azure"
+    assert payload["project_id"] == "project-release1-vmware-azure"
     assert payload["collector"] == {
         "collector_id": "collector-release1-demo",
         "status": "not_deployed",

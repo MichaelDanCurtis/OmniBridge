@@ -842,7 +842,7 @@ Example:
 
 ```yaml
 id: node-omni-01hxyz
-project_id: project-acme-vmware-azure
+project_id: project-release1-vmware-azure
 source_connector_id: vcenter-prod
 source_object:
   platform: vmware
@@ -909,7 +909,7 @@ Example:
 ```yaml
 kind: project.rule
 version: 1
-scope: project-acme-vmware-azure
+scope: project-release1-vmware-azure
 rule:
   if:
     vm_name_matches: "claims-db-old*"
@@ -1193,7 +1193,7 @@ Example:
   "tool": "estimate_project_scope",
   "permission": "read_analysis",
   "args": {
-    "project_id": "project-acme-vmware-azure",
+    "project_id": "project-release1-vmware-azure",
     "corridor": "vmware-to-azure",
     "scope_id": "scope-v3"
   },
@@ -1347,7 +1347,7 @@ Example:
 ```yaml
 kind: commercial.change_order
 version: 1
-project: acme-vmware-to-azure
+project: release1-vmware-to-azure
 reason: in_scope_assets_increased
 previous_scope:
   compute_nodes: 420

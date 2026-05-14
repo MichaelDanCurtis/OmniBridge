@@ -5,7 +5,7 @@ from omnibridge_vmware_to_azure.mapper import map_fixture_to_graph
 
 
 FIXTURE_PATH = (
-    Path(__file__).resolve().parents[1] / "fixtures" / "acme-small-estate.json"
+    Path(__file__).resolve().parents[1] / "fixtures" / "release1-small-estate.json"
 )
 
 

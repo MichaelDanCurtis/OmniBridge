@@ -52,8 +52,8 @@ def test_fixture_analysis_returns_consultant_summary() -> None:
 def test_graph_grounded_analysis_uses_topology_context() -> None:
     result = run_graph_grounded_analysis(
         application_name="Claims Portal",
-        project_id="project-acme-vmware-azure",
-        tenant_id="tenant-acme",
+        project_id="project-release1-vmware-azure",
+        tenant_id="tenant-omnibridge-demo",
         graph_tools=GraphKnowledgeTools(FakeTopologyRepository()),
         blocker_count=1,
         warning_count=1,
@@ -61,7 +61,7 @@ def test_graph_grounded_analysis_uses_topology_context() -> None:
 
     assert result.analysis_source == "graph"
     assert result.summary.startswith(
-        "Claims Portal graph analysis: Project project-acme-vmware-azure has"
+        "Claims Portal graph analysis: Project project-release1-vmware-azure has"
     )
     assert "Review graph evidence: claims-db-01 -[RUNS_ON]-> esx01" in result.decision_points
     assert result.graph_context_summary is not None

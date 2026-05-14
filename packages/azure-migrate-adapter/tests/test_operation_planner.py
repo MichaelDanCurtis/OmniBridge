@@ -13,7 +13,7 @@ def test_planner_builds_dry_run_agentless_vmware_wave_operations() -> None:
         project=AzureMigrateProjectRef(
             subscription_id="sub-123",
             resource_group="rg-migrate",
-            project_name="omni-acme",
+            project_name="omnibridge-release1",
             region="westus2",
         ),
         wave_id="wave-001",
@@ -50,7 +50,7 @@ def test_planner_rejects_empty_wave() -> None:
             project=AzureMigrateProjectRef(
                 subscription_id="sub-123",
                 resource_group="rg-migrate",
-                project_name="omni-acme",
+                project_name="omnibridge-release1",
                 region="westus2",
             ),
             wave_id="wave-001",

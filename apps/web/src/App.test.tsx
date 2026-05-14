@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
@@ -9,6 +9,8 @@ import App from "./App";
 describe("App", () => {
   afterEach(() => {
     cleanup();
+    localStorage.clear();
+    document.documentElement.removeAttribute("data-theme");
     vi.restoreAllMocks();
   });
 
@@ -16,7 +18,7 @@ describe("App", () => {
     let latestDiscoveryRequestCount = 0;
     const workspaceResponse = {
       project: {
-        name: "ACME VMware-to-Azure Assessment",
+        name: "OmniBridge VMware-to-Azure Assessment",
         source: {
           vcenter: "vcsa-prod-01",
         },
@@ -42,7 +44,7 @@ describe("App", () => {
         neo4j_configured: true,
       },
       intake: {
-        project_id: "project-acme-vmware-azure",
+        project_id: "project-release1-vmware-azure",
         collector: {
           collector_id: "collector-release1-demo",
           status: "not_deployed",
@@ -126,7 +128,7 @@ describe("App", () => {
         ],
       },
       validation_evidence: {
-        project_id: "project-acme-vmware-azure",
+        project_id: "project-release1-vmware-azure",
         wave_id: "wave-001",
         summary: {
           total_checks: 18,
@@ -345,7 +347,7 @@ describe("App", () => {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              project_id: "project-acme-vmware-azure",
+              project_id: "project-release1-vmware-azure",
               collector: {
                 ...workspaceResponse.intake.collector,
                 status: "pending_registration",
@@ -654,5 +656,35 @@ describe("App", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Unable to load workspace data.",
     );
+  });
+
+  it("persists an explicit appearance mode preference from the workspace header", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("Unavailable", { status: 503 }));
+
+    render(<App />);
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    const appearanceControl = screen.getByRole("group", { name: "Appearance" });
+    const lightMode = within(appearanceControl).getByRole("button", { name: "Light mode" });
+    const darkMode = within(appearanceControl).getByRole("button", { name: "Dark mode" });
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+    expect(lightMode).toHaveAttribute("aria-pressed", "true");
+    expect(darkMode).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(darkMode);
+
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    });
+    expect(localStorage.getItem("omnibridge-theme")).toBe("dark");
+    expect(lightMode).toHaveAttribute("aria-pressed", "false");
+    expect(darkMode).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(lightMode);
+
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute("data-theme", "light");
+    });
+    expect(localStorage.getItem("omnibridge-theme")).toBe("light");
   });
 });

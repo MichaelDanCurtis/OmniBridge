@@ -317,7 +317,7 @@ export async function loadApprovals(): Promise<ProjectWorkflow> {
 export async function persistFixtureGraph(): Promise<GraphImportResponse> {
   const response = await fetch("/imports/vmware-fixture", {
     body: JSON.stringify({
-      fixture_path: "corridors/vmware-to-azure/fixtures/acme-small-estate.json",
+      fixture_path: "corridors/vmware-to-azure/fixtures/release1-small-estate.json",
       persist_to_neo4j: true,
     }),
     headers: {

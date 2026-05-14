@@ -16,7 +16,7 @@ from omnibridge_api.control_plane_store import (
 from omnibridge_api.settings import settings
 
 
-_RELEASE1_PROJECT_ID = "project-acme-vmware-azure"
+_RELEASE1_PROJECT_ID = "project-release1-vmware-azure"
 _RELEASE1_COLLECTOR_ID = "collector-release1-demo"
 _RELEASE1_VCENTER = "vcsa-prod-01"
 

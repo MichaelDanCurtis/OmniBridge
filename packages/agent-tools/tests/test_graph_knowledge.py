@@ -46,14 +46,14 @@ def test_graph_knowledge_tool_returns_bounded_project_context() -> None:
     repository = FakeGraphRepository(topology)
 
     result = GraphKnowledgeTools(repository).get_project_topology_context(
-        project_id="project-acme-vmware-azure",
-        tenant_id="tenant-acme",
+        project_id="project-release1-vmware-azure",
+        tenant_id="tenant-omnibridge-demo",
         edge_limit=25,
     )
 
-    assert repository.calls == [("project-acme-vmware-azure", "tenant-acme", 25)]
+    assert repository.calls == [("project-release1-vmware-azure", "tenant-omnibridge-demo", 25)]
     assert result.summary == (
-        "Project project-acme-vmware-azure has 7 graph nodes across 3 labels "
+        "Project project-release1-vmware-azure has 7 graph nodes across 3 labels "
         "and 6 relationships across 2 types."
     )
     assert result.node_counts["ComputeNode"] == 3

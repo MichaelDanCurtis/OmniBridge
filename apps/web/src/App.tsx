@@ -20,13 +20,22 @@ import {
   type WorkspaceData,
 } from "./api";
 
-const FALLBACK_PROJECT_TITLE = "ACME VMware-to-Azure Assessment";
+const FALLBACK_PROJECT_TITLE = "OmniBridge VMware-to-Azure Assessment";
 
 type SummaryCard = {
   label: string;
   value: string;
   tone: "neutral" | "critical" | "warning";
 };
+
+type ThemeMode = "light" | "dark";
+
+type WorkspaceThemeProps = {
+  theme: ThemeMode;
+  onThemeChange: (theme: ThemeMode) => void;
+};
+
+const THEME_STORAGE_KEY = "omnibridge-theme";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -72,7 +81,24 @@ function formatQuantity(quantity: number, unit: string): string {
   return `${quantity.toLocaleString("en-US")} ${unit}`;
 }
 
-function WorkspaceHeader({ projectTitle = FALLBACK_PROJECT_TITLE }: { projectTitle?: string }) {
+function getPreferredTheme(): ThemeMode {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+
+  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (storedTheme === "light" || storedTheme === "dark") {
+    return storedTheme;
+  }
+
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches === true ? "dark" : "light";
+}
+
+function WorkspaceHeader({
+  onThemeChange,
+  projectTitle = FALLBACK_PROJECT_TITLE,
+  theme,
+}: { projectTitle?: string } & WorkspaceThemeProps) {
   return (
     <section className="workspace-header" aria-labelledby="workspace-title">
       <div>
@@ -80,15 +106,40 @@ function WorkspaceHeader({ projectTitle = FALLBACK_PROJECT_TITLE }: { projectTit
         <h1 id="workspace-title">OmniBridge Consultant Workspace</h1>
         <p className="workspace-subtitle">{projectTitle}</p>
       </div>
-      <span className="status-pill">Migration intake</span>
+      <div className="header-actions">
+        <span className="status-pill">Migration intake</span>
+        <div aria-label="Appearance" className="appearance-control" role="group">
+          <span className="appearance-label">Appearance</span>
+          <div className="theme-segment">
+            <button
+              aria-label="Light mode"
+              aria-pressed={theme === "light"}
+              className={`theme-option ${theme === "light" ? "theme-option--active" : ""}`}
+              onClick={() => onThemeChange("light")}
+              type="button"
+            >
+              Light
+            </button>
+            <button
+              aria-label="Dark mode"
+              aria-pressed={theme === "dark"}
+              className={`theme-option ${theme === "dark" ? "theme-option--active" : ""}`}
+              onClick={() => onThemeChange("dark")}
+              type="button"
+            >
+              Dark
+            </button>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
 
-function WorkspaceLoading() {
+function WorkspaceLoading({ onThemeChange, theme }: WorkspaceThemeProps) {
   return (
     <main className="workspace-shell">
-      <WorkspaceHeader />
+      <WorkspaceHeader onThemeChange={onThemeChange} theme={theme} />
       <section className="assessment-panel" aria-live="polite">
         <p className="loading-message">Loading workspace data...</p>
       </section>
@@ -96,10 +147,10 @@ function WorkspaceLoading() {
   );
 }
 
-function WorkspaceError() {
+function WorkspaceError({ onThemeChange, theme }: WorkspaceThemeProps) {
   return (
     <main className="workspace-shell">
-      <WorkspaceHeader />
+      <WorkspaceHeader onThemeChange={onThemeChange} theme={theme} />
       <section className="assessment-panel" role="alert">
         <p className="error-title">Unable to load workspace data.</p>
         <p className="error-message">
@@ -110,7 +161,11 @@ function WorkspaceError() {
   );
 }
 
-function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
+function WorkspaceLoaded({
+  data,
+  onThemeChange,
+  theme,
+}: { data: WorkspaceData } & WorkspaceThemeProps) {
   const [intake, setIntake] = useState<IntakeSnapshot>(data.intake);
   const [selectedScope, setSelectedScope] = useState<string[]>(
     data.target_design.vm_targets.map((target) => target.name),
@@ -422,7 +477,11 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
 
   return (
     <main className="workspace-shell">
-      <WorkspaceHeader projectTitle={data.project.name} />
+      <WorkspaceHeader
+        onThemeChange={onThemeChange}
+        projectTitle={data.project.name}
+        theme={theme}
+      />
 
       <section className="workflow-panel" aria-label="Migration workflow">
         <div className="panel-heading">
@@ -1202,6 +1261,12 @@ function WorkspaceLoaded({ data }: { data: WorkspaceData }) {
 export default function App() {
   const [data, setData] = useState<WorkspaceData | null>(null);
   const [error, setError] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>(() => getPreferredTheme());
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -1223,13 +1288,17 @@ export default function App() {
     };
   }, []);
 
+  function handleThemeChange(nextTheme: ThemeMode) {
+    setTheme(nextTheme);
+  }
+
   if (error) {
-    return <WorkspaceError />;
+    return <WorkspaceError onThemeChange={handleThemeChange} theme={theme} />;
   }
 
   if (!data) {
-    return <WorkspaceLoading />;
+    return <WorkspaceLoading onThemeChange={handleThemeChange} theme={theme} />;
   }
 
-  return <WorkspaceLoaded data={data} />;
+  return <WorkspaceLoaded data={data} onThemeChange={handleThemeChange} theme={theme} />;
 }

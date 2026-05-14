@@ -23,7 +23,7 @@ def test_import_fixture_route_returns_counts() -> None:
 
     response = client.post(
         "/imports/vmware-fixture",
-        json={"fixture_path": "corridors/vmware-to-azure/fixtures/acme-small-estate.json"},
+        json={"fixture_path": "corridors/vmware-to-azure/fixtures/release1-small-estate.json"},
     )
 
     assert response.status_code == 200
@@ -41,7 +41,7 @@ def test_import_fixture_route_can_persist_to_graph_repository() -> None:
         response = client.post(
             "/imports/vmware-fixture",
             json={
-                "fixture_path": "corridors/vmware-to-azure/fixtures/acme-small-estate.json",
+                "fixture_path": "corridors/vmware-to-azure/fixtures/release1-small-estate.json",
                 "persist_to_neo4j": True,
             },
         )
@@ -64,8 +64,8 @@ def test_import_knowledge_seed_route_can_persist_to_graph_repository() -> None:
         response = client.post(
             "/imports/knowledge-seed/vmware-to-azure",
             json={
-                "project_id": "project-acme-vmware-azure",
-                "tenant_id": "tenant-acme",
+                "project_id": "project-release1-vmware-azure",
+                "tenant_id": "tenant-omnibridge-demo",
                 "persist_to_neo4j": True,
             },
         )
@@ -87,8 +87,8 @@ def test_import_knowledge_seed_route_requires_graph_repository_when_persisting()
         response = client.post(
             "/imports/knowledge-seed/vmware-to-azure",
             json={
-                "project_id": "project-acme-vmware-azure",
-                "tenant_id": "tenant-acme",
+                "project_id": "project-release1-vmware-azure",
+                "tenant_id": "tenant-omnibridge-demo",
                 "persist_to_neo4j": True,
             },
         )
@@ -106,7 +106,7 @@ def test_import_fixture_route_requires_graph_repository_when_persisting() -> Non
         response = client.post(
             "/imports/vmware-fixture",
             json={
-                "fixture_path": "corridors/vmware-to-azure/fixtures/acme-small-estate.json",
+                "fixture_path": "corridors/vmware-to-azure/fixtures/release1-small-estate.json",
                 "persist_to_neo4j": True,
             },
         )

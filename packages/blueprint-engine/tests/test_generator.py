@@ -3,7 +3,7 @@ from omnibridge_blueprint_engine.generator import generate_vmware_to_azure_bluep
 
 def test_blueprint_contains_corridor_and_approval_gates() -> None:
     blueprint = generate_vmware_to_azure_blueprint(
-        project_id="project-acme-vmware-azure",
+        project_id="project-release1-vmware-azure",
         application_name="Claims Portal",
         compute_node_names=["claims-web-01", "claims-api-01", "claims-db-01"],
     )
@@ -16,7 +16,7 @@ def test_blueprint_contains_corridor_and_approval_gates() -> None:
 
 def test_blueprint_uses_full_corridor_approval_gate_order() -> None:
     blueprint = generate_vmware_to_azure_blueprint(
-        project_id="project-acme-vmware-azure",
+        project_id="project-release1-vmware-azure",
         application_name="Claims Portal",
         compute_node_names=["claims-web-01"],
     )
@@ -36,7 +36,7 @@ def test_blueprint_does_not_alias_input_compute_nodes() -> None:
     compute_nodes = ["claims-web-01", "claims-api-01"]
 
     blueprint = generate_vmware_to_azure_blueprint(
-        project_id="project-acme-vmware-azure",
+        project_id="project-release1-vmware-azure",
         application_name="Claims Portal",
         compute_node_names=compute_nodes,
     )
@@ -48,7 +48,7 @@ def test_blueprint_does_not_alias_input_compute_nodes() -> None:
 
 def test_blueprint_has_serialized_artifact_identity() -> None:
     blueprint = generate_vmware_to_azure_blueprint(
-        project_id="project-acme-vmware-azure",
+        project_id="project-release1-vmware-azure",
         application_name="Claims Portal",
         compute_node_names=["claims-web-01"],
     )

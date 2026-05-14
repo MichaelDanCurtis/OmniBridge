@@ -89,7 +89,7 @@ Import the fixture without persistence:
 ```bash
 curl -sS http://127.0.0.1:8001/imports/vmware-fixture \
   -H 'Content-Type: application/json' \
-  -d '{"fixture_path":"corridors/vmware-to-azure/fixtures/acme-small-estate.json"}'
+  -d '{"fixture_path":"corridors/vmware-to-azure/fixtures/release1-small-estate.json"}'
 ```
 
 Import the fixture and persist the canonical graph into Neo4j:
@@ -97,7 +97,7 @@ Import the fixture and persist the canonical graph into Neo4j:
 ```bash
 curl -sS http://127.0.0.1:8001/imports/vmware-fixture \
   -H 'Content-Type: application/json' \
-  -d '{"fixture_path":"corridors/vmware-to-azure/fixtures/acme-small-estate.json","persist_to_neo4j":true}'
+  -d '{"fixture_path":"corridors/vmware-to-azure/fixtures/release1-small-estate.json","persist_to_neo4j":true}'
 ```
 
 Run the full MVP verification:

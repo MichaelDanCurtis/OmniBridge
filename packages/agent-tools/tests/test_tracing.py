@@ -14,19 +14,19 @@ def test_build_trace_metadata_contains_project_and_agent() -> None:
     )
 
     metadata = build_trace_metadata(
-        project_id="project-acme-vmware-azure",
+        project_id="project-release1-vmware-azure",
         agent_name="release1-analysis-agent",
         result=result,
     )
 
-    assert metadata["project_id"] == "project-acme-vmware-azure"
+    assert metadata["project_id"] == "project-release1-vmware-azure"
     assert metadata["agent_name"] == "release1-analysis-agent"
     assert metadata["requires_consultant_review"] is True
 
 
 def test_reconcile_agent_usage_calculates_token_variance_and_charges() -> None:
     usage = AgentUsageRecord(
-        project_id="project-acme-vmware-azure",
+        project_id="project-release1-vmware-azure",
         agent_name="release1-analysis-agent",
         trace_id="trace-001",
         estimated_tokens=9_000_000,
@@ -50,7 +50,7 @@ def test_build_trace_metadata_can_embed_langfuse_usage_payload() -> None:
         decision_points=["Confirm database subnet mapping."],
     )
     usage = AgentUsageRecord(
-        project_id="project-acme-vmware-azure",
+        project_id="project-release1-vmware-azure",
         agent_name="release1-analysis-agent",
         trace_id="trace-001",
         estimated_tokens=9_000_000,
@@ -60,7 +60,7 @@ def test_build_trace_metadata_can_embed_langfuse_usage_payload() -> None:
     )
 
     metadata = build_trace_metadata(
-        project_id="project-acme-vmware-azure",
+        project_id="project-release1-vmware-azure",
         agent_name="release1-analysis-agent",
         result=result,
         usage=usage,

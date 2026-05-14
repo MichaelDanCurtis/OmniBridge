@@ -7,7 +7,7 @@ from omnibridge_vmware_to_azure.fixture_loader import load_fixture
 
 def test_release1_demo_outputs_are_derived_from_fixture(tmp_path: Path) -> None:
     fixture = load_fixture(
-        Path("corridors/vmware-to-azure/fixtures/acme-small-estate.json")
+        Path("corridors/vmware-to-azure/fixtures/release1-small-estate.json")
     )
     fixture["vms"] = fixture["vms"][:2]
     fixture_path = tmp_path / "two-vm-estate.json"

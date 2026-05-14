@@ -50,13 +50,13 @@ def test_render_assessment_markdown_contains_project_and_decisions() -> None:
         ],
     )
     markdown = render_assessment_markdown(
-        project_name="ACME VMware-to-Azure Assessment",
+        project_name="OmniBridge VMware-to-Azure Assessment",
         application_name="Claims Portal",
         blockers=1,
         estimate=estimate,
     )
 
-    assert "# ACME VMware-to-Azure Assessment" in markdown
+    assert "# OmniBridge VMware-to-Azure Assessment" in markdown
     assert "Claims Portal" in markdown
     assert "1 blocker" in markdown
     assert "$27,250" in markdown
@@ -70,7 +70,7 @@ def test_render_assessment_markdown_contains_project_and_decisions() -> None:
 
 def test_render_blueprint_yaml_contains_waves_and_approval_gates() -> None:
     blueprint = generate_vmware_to_azure_blueprint(
-        project_id="project-acme-vmware-azure",
+        project_id="project-release1-vmware-azure",
         application_name="Claims Portal",
         compute_node_names=["claims-web-01", "claims-api-01", "claims-db-01"],
     )
@@ -86,13 +86,13 @@ def test_render_blueprint_yaml_contains_waves_and_approval_gates() -> None:
 
 def test_render_runbook_markdown_contains_cutover_and_validation_steps() -> None:
     blueprint = generate_vmware_to_azure_blueprint(
-        project_id="project-acme-vmware-azure",
+        project_id="project-release1-vmware-azure",
         application_name="Claims Portal",
         compute_node_names=["claims-web-01", "claims-api-01", "claims-db-01"],
     )
 
     markdown = render_runbook_markdown(
-        project_name="ACME VMware-to-Azure Assessment",
+        project_name="OmniBridge VMware-to-Azure Assessment",
         blueprint=blueprint,
         blocker_count=1,
     )
@@ -106,7 +106,7 @@ def test_render_runbook_markdown_contains_cutover_and_validation_steps() -> None
 
 def test_render_terraform_main_tf_contains_release1_vm_draft() -> None:
     blueprint = generate_vmware_to_azure_blueprint(
-        project_id="project-acme-vmware-azure",
+        project_id="project-release1-vmware-azure",
         application_name="Claims Portal",
         compute_node_names=["claims-web-01", "claims-api-01", "claims-db-01"],
     )
@@ -115,7 +115,7 @@ def test_render_terraform_main_tf_contains_release1_vm_draft() -> None:
         blueprint=blueprint,
         location="westus2",
         resource_group_name="rg-claims-prod",
-        subnet_id="/subscriptions/sub-acme-prod/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-prod/subnets/snet-app",
+        subnet_id="/subscriptions/sub-omnibridge-prod/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-prod/subnets/snet-app",
     )
 
     assert '# OmniBridge generated Terraform draft for Claims Portal' in terraform

@@ -75,7 +75,7 @@ def test_analysis_endpoint_can_use_graph_context_when_available() -> None:
     payload = response.json()
     assert payload["analysis_source"] == "graph"
     assert payload["graph_context_summary"].startswith(
-        "Project project-acme-vmware-azure has"
+        "Project project-release1-vmware-azure has"
     )
     assert "claims-db-01 -[RUNS_ON]-> esx01" in payload["graph_evidence_edges"]
 
@@ -98,7 +98,7 @@ def test_artifact_endpoint_returns_markdown_assessment() -> None:
     response = client.get("/artifacts/release1-assessment.md")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/markdown")
-    assert "# ACME VMware-to-Azure Assessment" in response.text
+    assert "# OmniBridge VMware-to-Azure Assessment" in response.text
     assert "Pricing model: project_fee_plus_agent_token_usage" in response.text
     assert "assessment_base" in response.text
     assert "estimated_agent_token_usage" in response.text
@@ -195,7 +195,7 @@ def test_workspace_endpoint_returns_consultant_workspace_sections() -> None:
 
     assert response.status_code == 200
     workspace = response.json()
-    assert workspace["project"]["name"] == "ACME VMware-to-Azure Assessment"
+    assert workspace["project"]["name"] == "OmniBridge VMware-to-Azure Assessment"
     assert workspace["project"]["source"]["vcenter"] == "vcsa-prod-01"
     assert workspace["summary"]["compute_nodes"] == 3
     assert workspace["summary"]["blockers"] == 1
