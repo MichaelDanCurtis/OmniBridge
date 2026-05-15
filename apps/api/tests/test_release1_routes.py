@@ -1,4 +1,6 @@
 from collections.abc import Iterator
+import json
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,6 +10,9 @@ from omnibridge_api.main import app
 from omnibridge_api.routes import approvals as approvals_routes
 from omnibridge_api.routes.analysis import get_analysis_graph_repository
 from omnibridge_canonical_graph.models import GraphTopologyEdge, ProjectTopology
+from omnibridge_vmware_to_azure.discovery_artifact import (
+    build_discovery_artifact_from_release1_fixture,
+)
 from omnibridge_workflow_engine.models import ApprovalLedger
 
 
@@ -315,6 +320,87 @@ def test_workspace_endpoint_reflects_completed_collector_graph_ingest() -> None:
     assert workspace["graph_ingest"]["source"] == "collector"
     assert workspace["graph_ingest"]["node_count"] == 12
     assert workspace["graph_ingest"]["edge_count"] == 13
+
+
+def test_workspace_endpoint_builds_inventory_from_latest_discovery_artifact(
+    tmp_path,
+) -> None:
+    reset_release1_intake_state()
+    client = TestClient(app)
+    fixture_path = (
+        Path(__file__).resolve().parents[3]
+        / "corridors"
+        / "vmware-to-azure"
+        / "fixtures"
+        / "release1-small-estate.json"
+    )
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    fixture["vms"] = fixture["vms"][:2]
+    collected_fixture_path = tmp_path / "collected-estate.json"
+    collected_fixture_path.write_text(json.dumps(fixture), encoding="utf-8")
+    artifact = build_discovery_artifact_from_release1_fixture(collected_fixture_path)
+
+    try:
+        bootstrap = client.post("/collectors/release1-demo/bootstrap").json()
+        registration_token = bootstrap["registration"]["registration_token"]
+        client.post(
+            "/collectors/release1-demo/register",
+            json={
+                "collector_id": "collector-release1-demo",
+                "registration_token": registration_token,
+                "version": "0.1.0",
+                "capabilities": ["fixture_discovery", "heartbeat"],
+            },
+        )
+        client.post("/discovery-runs/release1-demo/start")
+        client.post(
+            "/collectors/collector-release1-demo/jobs/claim",
+            json={
+                "registration_token": registration_token,
+                "version": "0.1.0",
+                "capabilities": ["fixture_discovery", "heartbeat"],
+            },
+        )
+        client.post(
+            "/collectors/collector-release1-demo/jobs/discovery-release1-demo-001/complete",
+            json={
+                "registration_token": registration_token,
+                "version": "0.1.0",
+                "capabilities": ["fixture_discovery", "heartbeat"],
+                "result": {
+                    "source": "collector",
+                    "estimate_ready": True,
+                    "discovery_artifact": artifact.model_dump(mode="json"),
+                    "log_events": [
+                        {
+                            "stage": "discovery",
+                            "status": "completed",
+                            "message": "Fixture discovery artifact collected.",
+                        }
+                    ],
+                },
+            },
+        )
+
+        response = client.get("/workspace/release1-demo")
+    finally:
+        reset_release1_intake_state()
+
+    assert response.status_code == 200
+    workspace = response.json()
+    assert workspace["summary"]["compute_nodes"] == 2
+    assert [vm["name"] for vm in workspace["inventory"]["vms"]] == [
+        "claims-web-01",
+        "claims-api-01",
+    ]
+    assert workspace["graph_ingest"] == {
+        "source": "collector",
+        "node_count": artifact.summary.graph_nodes,
+        "edge_count": artifact.summary.graph_edges,
+        "persisted": False,
+        "neo4j_configured": False,
+    }
+    assert workspace["estimate"]["asset_count"] == 2
 
 
 def test_workspace_endpoint_reflects_live_approval_ledger() -> None:

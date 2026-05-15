@@ -128,6 +128,12 @@ export type CollectorSnapshot = {
   capabilities: string[];
 };
 
+export type DiscoveryLogEvent = {
+  stage: string;
+  status: string;
+  message: string;
+};
+
 export type DiscoveryRunSnapshot = {
   run_id: string | null;
   status: "not_started" | "queued" | "running" | "completed" | "failed";
@@ -137,6 +143,7 @@ export type DiscoveryRunSnapshot = {
   graph_nodes: number;
   graph_edges: number;
   estimate_ready: boolean;
+  log_events: DiscoveryLogEvent[];
 };
 
 export type IntakeSnapshot = {

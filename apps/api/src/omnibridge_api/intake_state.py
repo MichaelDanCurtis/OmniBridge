@@ -19,6 +19,8 @@ from omnibridge_api.settings import settings
 _RELEASE1_PROJECT_ID = "project-release1-vmware-azure"
 _RELEASE1_COLLECTOR_ID = "collector-release1-demo"
 _RELEASE1_VCENTER = "vcsa-prod-01"
+_RELEASE1_CREDENTIAL_REF = "credential:vcenter-readonly"
+_RELEASE1_FIXTURE_PATH = "corridors/vmware-to-azure/fixtures/release1-small-estate.json"
 
 
 class CollectorStatus(StrEnum):
@@ -55,6 +57,7 @@ class DiscoveryRunSnapshot(BaseModel):
     graph_nodes: int
     graph_edges: int
     estimate_ready: bool
+    log_events: list[dict[str, object]] = []
 
 
 class IntakeSnapshot(BaseModel):
@@ -193,6 +196,13 @@ def start_release1_discovery_run() -> IntakeSnapshot:
         result={
             "source": "collector",
             "estimate_ready": False,
+            "log_events": [
+                {
+                    "stage": "queued",
+                    "status": "queued",
+                    "message": "Discovery run queued for collector.",
+                }
+            ],
         },
     )
     return _snapshot_from_store(store, collector=collector)
@@ -231,13 +241,19 @@ def complete_release1_collector_job(
     if collector is None:
         raise CollectorNotFoundError(collector_id)
 
+    existing_run = store.get_run(job_id)
+    completion_result = dict(request.result)
+    completion_result["log_events"] = _merge_log_events(
+        existing_run.result if existing_run is not None else {},
+        completion_result,
+    )
     store.complete_run(
         run_id=job_id,
         collector_id=collector_id,
         registration_token=request.registration_token,
         version=request.version,
         capabilities=request.capabilities,
-        result=dict(request.result),
+        result=completion_result,
     )
     collector = store.get_collector(collector_id)
     if collector is None:
@@ -284,6 +300,7 @@ def _snapshot_from_store(
                 and discovery_run.status == DiscoveryRunStatus.COMPLETED
                 and bool(discovery_result.get("estimate_ready", False))
             ),
+            log_events=_log_events(discovery_result),
         ),
     )
 
@@ -315,7 +332,10 @@ def _job_from_run(run: StoredRun) -> CollectorJob:
         status=run.status,
         parameters={
             "source": str(run.result.get("source", "collector")),
-            "fixture_path": "corridors/vmware-to-azure/fixtures/release1-small-estate.json",
+            "fixture_path": _RELEASE1_FIXTURE_PATH,
+            "source_mode": "fixture",
+            "vcenter": _RELEASE1_VCENTER,
+            "credential_ref": _RELEASE1_CREDENTIAL_REF,
         },
     )
 
@@ -329,7 +349,30 @@ def _discovery_status(run: StoredRun | None) -> DiscoveryRunStatus:
 def _completed_int(run: StoredRun | None, result: dict[str, object], key: str) -> int:
     if run is None or run.status != DiscoveryRunStatus.COMPLETED:
         return 0
+    artifact = result.get("discovery_artifact")
+    if isinstance(artifact, dict):
+        summary = artifact.get("summary")
+        if isinstance(summary, dict) and key in summary:
+            return int(summary.get(key, 0))
     return int(result.get(key, 0))
+
+
+def _log_events(result: dict[str, object]) -> list[dict[str, object]]:
+    events = result.get("log_events")
+    if not isinstance(events, list):
+        return []
+    return [event for event in events if isinstance(event, dict)]
+
+
+def _merge_log_events(
+    existing_result: dict[str, object],
+    completion_result: dict[str, object],
+) -> list[dict[str, object]]:
+    merged = _log_events(existing_result)
+    for event in _log_events(completion_result):
+        if event not in merged:
+            merged.append(event)
+    return merged
 
 
 __all__ = [

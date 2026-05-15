@@ -39,6 +39,7 @@ def test_latest_discovery_run_starts_with_collector_not_deployed() -> None:
         "graph_nodes": 0,
         "graph_edges": 0,
         "estimate_ready": False,
+        "log_events": [],
     }
 
 
@@ -76,6 +77,7 @@ def test_collector_registration_and_discovery_run_unlock_estimate_data() -> None
     assert registered["collector"]["status"] == "online"
     assert registered["discovery"]["status"] == "not_started"
     assert registered["discovery"]["estimate_ready"] is False
+    assert registered["discovery"]["log_events"] == []
 
     discovery_response = client.post("/discovery-runs/release1-demo/start")
 
@@ -91,6 +93,13 @@ def test_collector_registration_and_discovery_run_unlock_estimate_data() -> None
         "graph_nodes": 0,
         "graph_edges": 0,
         "estimate_ready": False,
+        "log_events": [
+            {
+                "stage": "queued",
+                "status": "queued",
+                "message": "Discovery run queued for collector.",
+            }
+        ],
     }
 
     claim_response = client.post(
@@ -111,6 +120,9 @@ def test_collector_registration_and_discovery_run_unlock_estimate_data() -> None
         "parameters": {
             "source": "collector",
             "fixture_path": "corridors/vmware-to-azure/fixtures/release1-small-estate.json",
+            "source_mode": "fixture",
+            "vcenter": "vcsa-prod-01",
+            "credential_ref": "credential:vcenter-readonly",
         },
     }
 
@@ -127,6 +139,13 @@ def test_collector_registration_and_discovery_run_unlock_estimate_data() -> None
                 "graph_nodes": 12,
                 "graph_edges": 13,
                 "estimate_ready": True,
+                "log_events": [
+                    {
+                        "stage": "discovery",
+                        "status": "completed",
+                        "message": "Fixture discovery artifact collected.",
+                    }
+                ],
             },
         },
     )
@@ -143,6 +162,23 @@ def test_collector_registration_and_discovery_run_unlock_estimate_data() -> None
         "graph_nodes": 12,
         "graph_edges": 13,
         "estimate_ready": True,
+        "log_events": [
+            {
+                "stage": "queued",
+                "status": "queued",
+                "message": "Discovery run queued for collector.",
+            },
+            {
+                "stage": "running",
+                "status": "running",
+                "message": "Collector claimed discovery run.",
+            },
+            {
+                "stage": "discovery",
+                "status": "completed",
+                "message": "Fixture discovery artifact collected.",
+            }
+        ],
     }
 
 

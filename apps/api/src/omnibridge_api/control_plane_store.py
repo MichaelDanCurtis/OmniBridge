@@ -217,7 +217,7 @@ class ControlPlaneStore:
             self._ensure_schema(connection)
             row = connection.execute(
                 """
-                SELECT run_id
+                SELECT run_id, result_json
                 FROM runs
                 WHERE project_id = ? AND status = ?
                 ORDER BY started_at ASC
@@ -229,13 +229,22 @@ class ControlPlaneStore:
                 return None
 
             run_id = row["run_id"]
+            result = json.loads(row["result_json"] or "{}")
+            result["log_events"] = _append_unique_event(
+                result.get("log_events"),
+                {
+                    "stage": "running",
+                    "status": "running",
+                    "message": "Collector claimed discovery run.",
+                },
+            )
             connection.execute(
                 """
                 UPDATE runs
-                SET status = ?, collector_id = ?
+                SET status = ?, collector_id = ?, result_json = ?
                 WHERE run_id = ?
                 """,
-                ("running", collector_id, run_id),
+                ("running", collector_id, json.dumps(result, sort_keys=True), run_id),
             )
 
         return self.get_run(run_id)
@@ -420,3 +429,17 @@ def _collector_from_row(row: sqlite3.Row) -> StoredCollector:
 
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _append_unique_event(
+    existing_events: Any,
+    event: dict[str, object],
+) -> list[dict[str, object]]:
+    events = [
+        existing_event
+        for existing_event in (existing_events if isinstance(existing_events, list) else [])
+        if isinstance(existing_event, dict)
+    ]
+    if event not in events:
+        events.append(event)
+    return events

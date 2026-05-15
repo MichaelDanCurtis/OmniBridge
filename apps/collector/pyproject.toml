@@ -2,7 +2,9 @@
 name = "omnibridge-collector"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+  "omnibridge-vmware-to-azure",
+]
 
 [project.scripts]
 omnibridge-collector = "omnibridge_collector.cli:main"

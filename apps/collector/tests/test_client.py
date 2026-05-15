@@ -11,6 +11,10 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from omnibridge_collector.cli import main
+from omnibridge_collector.vcenter_connector import (
+    VCenterConnectionConfig,
+    collect_vcenter_fixture,
+)
 from omnibridge_collector.client import (
     DEFAULT_HEARTBEAT_PATH_TEMPLATE,
     DEFAULT_JOB_CLAIM_PATH_TEMPLATE,
@@ -291,18 +295,36 @@ class CollectorClientTests(unittest.TestCase):
 
     def test_cli_run_once_derives_discovery_result_from_fixture_path(self):
         fixture = {
-            "clusters": [{"moid": "domain-c1"}],
-            "hosts": [{"moid": "host-101", "cluster_moid": "domain-c1"}],
-            "datastores": [{"moid": "datastore-11"}],
-            "networks": [{"moid": "dvportgroup-120"}, {"moid": "dvportgroup-121"}],
+            "project_id": "project-release1-vmware-azure",
+            "tenant_id": "tenant-omnibridge-demo",
+            "vcenter": "vcsa-prod-01",
+            "datacenter": "DC1",
+            "clusters": [{"moid": "domain-c1", "name": "Prod-Cluster"}],
+            "hosts": [
+                {"moid": "host-101", "name": "esx01", "cluster_moid": "domain-c1"}
+            ],
+            "datastores": [
+                {"moid": "datastore-11", "name": "datastore-prod-01", "capacity_gb": 2048}
+            ],
+            "networks": [
+                {"moid": "dvportgroup-120", "name": "dvpg-web-prod", "vlan": 120},
+                {"moid": "dvportgroup-121", "name": "dvpg-app-prod", "vlan": 121},
+            ],
             "vms": [
                 {
                     "moid": "vm-101",
+                    "name": "claims-web-01",
+                    "cluster_moid": "domain-c1",
                     "host_moid": "host-101",
-                    "nics": [{"network_moid": "dvportgroup-120"}],
+                    "cpu": 2,
+                    "memory_mb": 8192,
+                    "guest_os": "ubuntuLinux64Guest",
+                    "tools_status": "toolsOk",
+                    "snapshot_count": 0,
+                    "nics": [{"network_moid": "dvportgroup-120", "ip": "10.20.10.10"}],
                     "disks": [
-                        {"datastore_moid": "datastore-11"},
-                        {"datastore_moid": "datastore-11"},
+                        {"datastore_moid": "datastore-11", "size_gb": 128},
+                        {"datastore_moid": "datastore-11", "size_gb": 256},
                     ],
                 }
             ],
@@ -338,17 +360,85 @@ class CollectorClientTests(unittest.TestCase):
             )
 
         self.assertEqual(0, exit_code)
+        result = _RequestRecorder.requests[1]["body"]["result"]
+        self.assertEqual("collector", result["source"])
+        self.assertEqual(1, result["compute_nodes"])
+        self.assertEqual(2, result["network_segments"])
+        self.assertEqual(8, result["graph_nodes"])
+        self.assertEqual(7, result["graph_edges"])
+        self.assertTrue(result["estimate_ready"])
         self.assertEqual(
-            {
-                "source": "collector",
-                "compute_nodes": 1,
-                "network_segments": 2,
-                "graph_nodes": 8,
-                "graph_edges": 7,
-                "estimate_ready": True,
-            },
-            _RequestRecorder.requests[1]["body"]["result"],
+            "claims-web-01",
+            result["discovery_artifact"]["inventory"]["vms"][0]["name"],
         )
+        self.assertEqual(
+            [
+                {
+                    "stage": "discovery",
+                    "status": "completed",
+                    "message": "Fixture discovery artifact collected.",
+                }
+            ],
+            result["log_events"],
+        )
+
+    def test_vcenter_connector_builds_fixture_payload_from_inventory_client(self):
+        class FakeInventoryClient:
+            def collect_inventory(self):
+                return {
+                    "project_id": "project-release1-vmware-azure",
+                    "tenant_id": "tenant-omnibridge-demo",
+                    "vcenter": "vcsa-prod-01",
+                    "datacenter": "DC1",
+                    "clusters": [{"moid": "domain-c1", "name": "Prod-Cluster"}],
+                    "hosts": [
+                        {
+                            "moid": "host-101",
+                            "name": "esx01",
+                            "cluster_moid": "domain-c1",
+                        }
+                    ],
+                    "datastores": [
+                        {
+                            "moid": "datastore-11",
+                            "name": "datastore-prod-01",
+                            "capacity_gb": 2048,
+                        }
+                    ],
+                    "networks": [
+                        {"moid": "dvportgroup-120", "name": "dvpg-web-prod", "vlan": 120}
+                    ],
+                    "vms": [
+                        {
+                            "moid": "vm-101",
+                            "name": "claims-web-01",
+                            "cluster_moid": "domain-c1",
+                            "host_moid": "host-101",
+                            "cpu": 2,
+                            "memory_mb": 8192,
+                            "guest_os": "ubuntuLinux64Guest",
+                            "tools_status": "toolsOk",
+                            "snapshot_count": 0,
+                            "nics": [
+                                {"network_moid": "dvportgroup-120", "ip": "10.20.10.10"}
+                            ],
+                            "disks": [{"datastore_moid": "datastore-11", "size_gb": 128}],
+                        }
+                    ],
+                }
+
+        fixture = collect_vcenter_fixture(
+            VCenterConnectionConfig(
+                vcenter="vcsa-prod-01",
+                credential_ref="credential:vcenter-readonly",
+                project_id="project-release1-vmware-azure",
+                tenant_id="tenant-omnibridge-demo",
+            ),
+            client=FakeInventoryClient(),
+        )
+
+        self.assertEqual("vcsa-prod-01", fixture["vcenter"])
+        self.assertEqual("claims-web-01", fixture["vms"][0]["name"])
 
     def test_cli_run_once_fails_when_fixture_path_cannot_be_resolved(self):
         _RequestRecorder.next_body = {

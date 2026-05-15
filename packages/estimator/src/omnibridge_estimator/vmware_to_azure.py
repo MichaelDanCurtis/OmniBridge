@@ -2,7 +2,7 @@ from omnibridge_estimator.models import CommercialEstimate, EstimateLineItem
 
 ASSUMPTIONS = [
     "Estimate is based on fixture/import metadata.",
-    "Live vCenter discovery is not included in this MVP path.",
+    "Live vCenter discovery requires collector credentials and a pyVmomi-enabled runtime.",
     "Azure Migrate is assumed as the execution backend for supported VMs.",
     "Agent usage is estimated before execution and reconciled against actual token usage.",
 ]

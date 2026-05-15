@@ -310,6 +310,7 @@ function WorkspaceLoaded({
       : isDiscoveryFailed
         ? "Discovery failed. Review collector logs, then queue discovery again."
         : "Estimate, inventory, topology, target design, generated artifacts, and migration wave controls unlock after the collector completes discovery.";
+  const collectorLogEvents = (intake.discovery.log_events ?? []).slice(-4);
 
   useEffect(() => {
     let isMounted = true;
@@ -595,6 +596,32 @@ function WorkspaceLoaded({
                 {isRefreshingCollector ? "Refreshing..." : "Refresh status"}
               </button>
             </div>
+            {collectorLogEvents.length > 0 ? (
+              <section className="collector-activity" aria-label="Collector activity">
+                <div className="collector-activity-heading">
+                  <h3>Collector activity</h3>
+                  <span>
+                    {collectorLogEvents.length}{" "}
+                    {collectorLogEvents.length === 1 ? "event" : "events"}
+                  </span>
+                </div>
+                <ol className="collector-log-list">
+                  {collectorLogEvents.map((event, index) => (
+                    <li key={`${event.stage}-${event.status}-${index}`}>
+                      <span
+                        className={`collector-log-status collector-log-status--${event.status}`}
+                      >
+                        {event.status}
+                      </span>
+                      <div>
+                        <strong>{event.stage}</strong>
+                        <p>{event.message}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            ) : null}
             {collectorBootstrap ? (
               <dl className="workflow-facts workflow-facts--compact">
                 <div>

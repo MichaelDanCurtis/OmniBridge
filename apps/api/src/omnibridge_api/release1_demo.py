@@ -5,6 +5,7 @@ from typing import Any
 
 from omnibridge_agent_tools.models import AnalysisResult
 from omnibridge_agent_tools.analysis_workflow import run_fixture_analysis
+from omnibridge_api.control_plane_store import default_store
 from omnibridge_api.intake_state import get_release1_intake_snapshot
 from omnibridge_api.settings import settings
 from omnibridge_azure_migrate_adapter import (
@@ -377,7 +378,7 @@ def _build_workspace(
 def build_release1_demo(
     fixture_path: Path = DEFAULT_RELEASE1_FIXTURE_PATH,
 ) -> Release1Demo:
-    fixture = load_fixture(fixture_path)
+    fixture = _load_release1_fixture(fixture_path)
     graph = map_fixture_to_graph(fixture)
     compute_nodes = _compute_nodes(graph)
     network_segments = _network_segments(graph)
@@ -469,3 +470,45 @@ def build_release1_demo(
             validation_evidence=validation_evidence,
         ),
     )
+
+
+def _load_release1_fixture(fixture_path: Path) -> dict[str, Any]:
+    if Path(fixture_path) == DEFAULT_RELEASE1_FIXTURE_PATH:
+        artifact = _latest_completed_discovery_artifact()
+        if artifact is not None:
+            return _fixture_from_discovery_artifact(artifact)
+    return load_fixture(fixture_path)
+
+
+def _latest_completed_discovery_artifact() -> dict[str, Any] | None:
+    run = default_store().get_run("discovery-release1-demo-001")
+    if run is None or run.status != "completed":
+        return None
+    artifact = run.result.get("discovery_artifact")
+    return artifact if isinstance(artifact, dict) else None
+
+
+def _fixture_from_discovery_artifact(artifact: dict[str, Any]) -> dict[str, Any]:
+    source = _dict_value(artifact, "source")
+    inventory = _dict_value(artifact, "inventory")
+    return {
+        "project_id": source.get("project_id", "project-release1-vmware-azure"),
+        "tenant_id": source.get("tenant_id", "tenant-omnibridge-demo"),
+        "vcenter": artifact.get("vcenter", "vcsa-prod-01"),
+        "datacenter": artifact.get("datacenter", "DC1"),
+        "clusters": _list_value(inventory, "clusters"),
+        "hosts": _list_value(inventory, "hosts"),
+        "datastores": _list_value(inventory, "datastores"),
+        "networks": _list_value(inventory, "networks"),
+        "vms": _list_value(inventory, "vms"),
+    }
+
+
+def _dict_value(payload: dict[str, Any], key: str) -> dict[str, Any]:
+    value = payload.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _list_value(payload: dict[str, Any], key: str) -> list[Any]:
+    value = payload.get(key)
+    return value if isinstance(value, list) else []

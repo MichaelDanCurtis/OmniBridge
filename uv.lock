@@ -585,6 +585,12 @@ requires-dist = [
 name = "omnibridge-collector"
 version = "0.1.0"
 source = { editable = "apps/collector" }
+dependencies = [
+    { name = "omnibridge-vmware-to-azure" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "omnibridge-vmware-to-azure", editable = "corridors/vmware-to-azure" }]
 
 [[package]]
 name = "omnibridge-estimator"

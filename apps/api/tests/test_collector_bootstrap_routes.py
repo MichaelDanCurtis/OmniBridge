@@ -209,6 +209,9 @@ def test_queued_discovery_job_is_labeled_as_collector_sourced_work() -> None:
     assert claim_response.json()["job"]["parameters"] == {
         "source": "collector",
         "fixture_path": "corridors/vmware-to-azure/fixtures/release1-small-estate.json",
+        "source_mode": "fixture",
+        "vcenter": "vcsa-prod-01",
+        "credential_ref": "credential:vcenter-readonly",
     }
 
 

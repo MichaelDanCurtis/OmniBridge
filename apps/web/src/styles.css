@@ -192,12 +192,14 @@ button {
 
 h1,
 h2,
+h3,
 p {
   overflow-wrap: anywhere;
 }
 
 h1,
-h2 {
+h2,
+h3 {
   color: var(--text);
   line-height: 1.15;
   margin: 0;
@@ -209,6 +211,10 @@ h1 {
 
 h2 {
   font-size: 1.15rem;
+}
+
+h3 {
+  font-size: 0.92rem;
 }
 
 .workspace-subtitle {
@@ -486,6 +492,91 @@ h2 {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: auto;
+}
+
+.collector-activity {
+  background: var(--surface-muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.collector-activity-heading {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.collector-activity-heading span {
+  color: var(--text-soft);
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.collector-log-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.collector-log-list li {
+  align-items: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border-muted);
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 8px;
+}
+
+.collector-log-list strong {
+  color: var(--text);
+  display: block;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.collector-log-list p {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin: 2px 0 0;
+}
+
+.collector-log-status {
+  background: var(--surface-subtle);
+  border: 1px solid var(--chip-border);
+  border-radius: 999px;
+  color: var(--text-subtle);
+  font-size: 0.7rem;
+  font-weight: 800;
+  max-width: 110px;
+  overflow-wrap: anywhere;
+  padding: 3px 7px;
+  text-transform: uppercase;
+}
+
+.collector-log-status--completed {
+  background: var(--button-subtle-bg);
+  color: var(--brand);
+}
+
+.collector-log-status--failed {
+  background: var(--critical-bg);
+  color: var(--critical);
+}
+
+.collector-log-status--queued,
+.collector-log-status--running {
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .scope-list {

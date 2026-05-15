@@ -65,6 +65,13 @@ describe("App", () => {
           graph_nodes: 0,
           graph_edges: 0,
           estimate_ready: false,
+          log_events: [
+            {
+              stage: "collector",
+              status: "not_started",
+              message: "Collector has not been deployed yet.",
+            },
+          ],
         },
       },
       workflow: {
@@ -351,6 +358,13 @@ describe("App", () => {
           graph_nodes: 12,
           graph_edges: 13,
           estimate_ready: true,
+          log_events: [
+            {
+              stage: "discovery",
+              status: "completed",
+              message: "Discovery completed and estimate inputs are ready.",
+            },
+          ],
         },
       },
       workflow: estimateApproved
@@ -439,6 +453,13 @@ describe("App", () => {
                   graph_nodes: 0,
                   graph_edges: 0,
                   estimate_ready: false,
+                  log_events: [
+                    {
+                      stage: "collection",
+                      status: "running",
+                      message: "Collector inventory scan is running.",
+                    },
+                  ],
                 }
               : {
                   run_id: "discovery-release1-demo-001",
@@ -449,6 +470,13 @@ describe("App", () => {
                   graph_nodes: 12,
                   graph_edges: 13,
                   estimate_ready: true,
+                  log_events: [
+                    {
+                      stage: "discovery",
+                      status: "completed",
+                      message: "Discovery completed and estimate inputs are ready.",
+                    },
+                  ],
                 };
         return Promise.resolve(
           new Response(
@@ -489,6 +517,13 @@ describe("App", () => {
                 graph_nodes: 0,
                 graph_edges: 0,
                 estimate_ready: false,
+                log_events: [
+                  {
+                    stage: "queue",
+                    status: "queued",
+                    message: "Discovery job queued for collector pickup.",
+                  },
+                ],
               },
             }),
             { status: 200 },
@@ -607,9 +642,11 @@ describe("App", () => {
     expect(screen.getByText("Ready to queue discovery")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Queue discovery" }));
     expect(await screen.findByText("Discovery queued for collector")).toBeInTheDocument();
+    expect(screen.getByText("Discovery job queued for collector pickup.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Discovery results locked" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
     expect(await screen.findByText("Collector running discovery")).toBeInTheDocument();
+    expect(screen.getByText("Collector inventory scan is running.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Discovery results locked" })).toBeInTheDocument();
     workspaceReloadFails = true;
     fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
@@ -619,6 +656,9 @@ describe("App", () => {
     workspaceReloadFails = false;
     fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
     expect(await screen.findByText("3 VMs discovered from collector")).toBeInTheDocument();
+    expect(
+      screen.getByText("Discovery completed and estimate inputs are ready."),
+    ).toBeInTheDocument();
     await waitFor(() => expect(workspaceRequestCount).toBe(3));
     expect(screen.getByRole("heading", { name: "Claims Portal" })).toBeInTheDocument();
     expect(screen.getByText("$27,250 project fee")).toBeInTheDocument();

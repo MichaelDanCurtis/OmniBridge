@@ -17,6 +17,15 @@ from omnibridge_collector.client import (
     DEFAULT_REGISTER_PATH,
     CollectorClient,
 )
+from omnibridge_collector.vcenter_connector import (
+    VCenterCollectionError,
+    VCenterConnectionConfig,
+    collect_vcenter_fixture,
+)
+from omnibridge_vmware_to_azure.discovery_artifact import (
+    build_discovery_artifact_from_fixture_payload,
+    build_discovery_artifact_from_release1_fixture,
+)
 
 
 DEFAULT_VERSION = "0.1.0"
@@ -189,7 +198,7 @@ def _run_once(
         registration_token=registration_token,
         version=version,
         capabilities=capabilities,
-        result=_fixture_discovery_result(parameters),
+        result=_discovery_result(parameters),
     )
 
 
@@ -235,6 +244,13 @@ def _run(
     return 0
 
 
+def _discovery_result(parameters: dict[str, object]) -> dict[str, object]:
+    source_mode = str(parameters.get("source_mode", "fixture"))
+    if source_mode == "vcenter":
+        return _vcenter_discovery_result(parameters)
+    return _fixture_discovery_result(parameters)
+
+
 def _fixture_discovery_result(parameters: dict[str, object]) -> dict[str, object]:
     source = str(parameters.get("source", "collector"))
     fixture_path = parameters.get("fixture_path")
@@ -244,8 +260,12 @@ def _fixture_discovery_result(parameters: dict[str, object]) -> dict[str, object
             raise CollectorExecutionError(
                 f"Fixture path could not be resolved: {fixture_path}"
             )
-        fixture = json.loads(path.read_text(encoding="utf-8"))
-        return _fixture_discovery_result_from_payload(fixture, source=source)
+        artifact = build_discovery_artifact_from_release1_fixture(path)
+        return _discovery_result_from_artifact(
+            artifact.model_dump(mode="json"),
+            source=source,
+            completion_message="Fixture discovery artifact collected.",
+        )
 
     return {
         "source": source,
@@ -257,57 +277,54 @@ def _fixture_discovery_result(parameters: dict[str, object]) -> dict[str, object
     }
 
 
-def _fixture_discovery_result_from_payload(
-    fixture: dict[str, object],
-    *,
-    source: str,
-) -> dict[str, object]:
-    clusters = _list_value(fixture, "clusters")
-    hosts = _list_value(fixture, "hosts")
-    datastores = _list_value(fixture, "datastores")
-    networks = _list_value(fixture, "networks")
-    vms = _list_value(fixture, "vms")
-    disk_count = 0
-    has_volume_edges = 0
-    uses_datastore_edges = 0
-    connected_edges = 0
-    runs_on_edges = 0
+def _vcenter_discovery_result(parameters: dict[str, object]) -> dict[str, object]:
+    try:
+        fixture = collect_vcenter_fixture(
+            VCenterConnectionConfig(
+                vcenter=str(parameters.get("vcenter", "")),
+                credential_ref=str(parameters.get("credential_ref", "")),
+                project_id=str(parameters.get("project_id", "project-release1-vmware-azure")),
+                tenant_id=str(parameters.get("tenant_id", "tenant-omnibridge-demo")),
+                datacenter=str(parameters.get("datacenter", "DC1")),
+            )
+        )
+    except VCenterCollectionError as error:
+        raise CollectorExecutionError(str(error)) from error
 
-    for vm in vms:
-        if not isinstance(vm, dict):
-            continue
-        if vm.get("host_moid"):
-            runs_on_edges += 1
-        for nic in _list_value(vm, "nics"):
-            if isinstance(nic, dict) and nic.get("network_moid"):
-                connected_edges += 1
-        for disk in _list_value(vm, "disks"):
-            if not isinstance(disk, dict):
-                continue
-            disk_count += 1
-            has_volume_edges += 1
-            if disk.get("datastore_moid"):
-                uses_datastore_edges += 1
-
-    belongs_to_edges = sum(
-        1 for host in hosts if isinstance(host, dict) and host.get("cluster_moid")
+    artifact = build_discovery_artifact_from_fixture_payload(
+        fixture,
+        source_mode="vcenter",
+    )
+    return _discovery_result_from_artifact(
+        artifact.model_dump(mode="json"),
+        source=str(parameters.get("source", "collector")),
+        completion_message="vCenter discovery artifact collected.",
     )
 
+
+def _discovery_result_from_artifact(
+    artifact: dict[str, object],
+    *,
+    source: str,
+    completion_message: str,
+) -> dict[str, object]:
+    summary = artifact.get("summary")
+    summary = summary if isinstance(summary, dict) else {}
     return {
         "source": source,
-        "compute_nodes": len(vms),
-        "network_segments": len(networks),
-        "graph_nodes": (
-            len(clusters) + len(hosts) + len(datastores) + len(networks) + len(vms) + disk_count
-        ),
-        "graph_edges": (
-            belongs_to_edges
-            + runs_on_edges
-            + connected_edges
-            + has_volume_edges
-            + uses_datastore_edges
-        ),
+        "compute_nodes": int(summary.get("compute_nodes", 0)),
+        "network_segments": int(summary.get("network_segments", 0)),
+        "graph_nodes": int(summary.get("graph_nodes", 0)),
+        "graph_edges": int(summary.get("graph_edges", 0)),
         "estimate_ready": True,
+        "discovery_artifact": artifact,
+        "log_events": [
+            {
+                "stage": "discovery",
+                "status": "completed",
+                "message": completion_message,
+            }
+        ],
     }
 
 
@@ -320,11 +337,6 @@ def _resolve_fixture_path(fixture_path: str) -> Path | None:
         if candidate.is_file():
             return candidate
     return None
-
-
-def _list_value(payload: dict[str, object], key: str) -> list[object]:
-    value = payload.get(key)
-    return value if isinstance(value, list) else []
 
 
 def _capabilities_from_args(capabilities: list[str] | None) -> list[str]:
