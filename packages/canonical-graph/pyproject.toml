@@ -1,0 +1,12 @@
+[project]
+name = "omnibridge-canonical-graph"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["neo4j>=5.25.0", "pydantic>=2.8.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/omnibridge_canonical_graph"]

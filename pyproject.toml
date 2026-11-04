@@ -1,0 +1,70 @@
+[project]
+name = "omnibridge"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "httpx>=0.28.0",
+  "omnibridge-agent-tools",
+  "omnibridge-api",
+  "omnibridge-azure-migrate-adapter",
+  "omnibridge-blueprint-engine",
+  "omnibridge-canonical-graph",
+  "omnibridge-collector",
+  "omnibridge-estimator",
+  "omnibridge-rules-engine",
+  "omnibridge-validation-engine",
+  "omnibridge-vmware-to-azure",
+  "omnibridge-workflow-engine",
+  "pytest>=8.0.0",
+  "ruff>=0.8.0",
+]
+
+[tool.uv.workspace]
+members = [
+  "apps/api",
+  "apps/collector",
+  "packages/canonical-graph",
+  "packages/azure-migrate-adapter",
+  "packages/estimator",
+  "packages/blueprint-engine",
+  "packages/rules-engine",
+  "packages/validation-engine",
+  "packages/agent-tools",
+  "packages/workflow-engine",
+  "corridors/vmware-to-azure",
+]
+
+[tool.uv.sources]
+omnibridge-agent-tools = { workspace = true }
+omnibridge-api = { workspace = true }
+omnibridge-azure-migrate-adapter = { workspace = true }
+omnibridge-blueprint-engine = { workspace = true }
+omnibridge-canonical-graph = { workspace = true }
+omnibridge-collector = { workspace = true }
+omnibridge-estimator = { workspace = true }
+omnibridge-rules-engine = { workspace = true }
+omnibridge-validation-engine = { workspace = true }
+omnibridge-vmware-to-azure = { workspace = true }
+omnibridge-workflow-engine = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = [
+  "apps/api/tests",
+  "apps/collector/tests",
+  "packages/azure-migrate-adapter/tests",
+  "packages/canonical-graph/tests",
+  "packages/estimator/tests",
+  "packages/blueprint-engine/tests",
+  "packages/rules-engine/tests",
+  "packages/validation-engine/tests",
+  "packages/agent-tools/tests",
+  "packages/workflow-engine/tests",
+  "corridors/vmware-to-azure/tests",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

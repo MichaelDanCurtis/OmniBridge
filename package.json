@@ -1,0 +1,7 @@
+{
+  "name": "omnibridge",
+  "private": true,
+  "scripts": {
+    "test": "pnpm -r test"
+  }
+}

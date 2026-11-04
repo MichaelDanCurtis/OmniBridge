@@ -1,0 +1,183 @@
+import pytest
+from pydantic import ValidationError
+
+from omnibridge_canonical_graph.models import GraphEdge, GraphNode
+
+
+def test_graph_node_requires_identity_fields() -> None:
+    node = GraphNode(
+        id="node-1",
+        project_id="project-1",
+        tenant_id="tenant-1",
+        labels=["ComputeNode"],
+        properties={"name": "claims-api-01"},
+    )
+
+    assert node.id == "node-1"
+    assert node.labels == ("ComputeNode",)
+    assert node.properties["name"] == "claims-api-01"
+
+
+def test_graph_edge_carries_confidence_and_evidence() -> None:
+    edge = GraphEdge(
+        id="edge-1",
+        project_id="project-1",
+        tenant_id="tenant-1",
+        source_id="node-api",
+        target_id="node-db",
+        relationship_type="DEPENDS_ON",
+        confidence=0.91,
+        evidence=["observed_tcp_1433_flow"],
+    )
+
+    assert edge.relationship_type == "DEPENDS_ON"
+    assert edge.confidence == 0.91
+    assert edge.evidence == ("observed_tcp_1433_flow",)
+
+
+@pytest.mark.parametrize("confidence", [-0.01, 1.01])
+def test_graph_edge_rejects_confidence_outside_unit_interval(
+    confidence: float,
+) -> None:
+    with pytest.raises(ValidationError):
+        GraphEdge(
+            id="edge-1",
+            project_id="project-1",
+            tenant_id="tenant-1",
+            source_id="node-api",
+            target_id="node-db",
+            relationship_type="DEPENDS_ON",
+            confidence=confidence,
+        )
+
+
+def test_graph_node_rejects_empty_labels() -> None:
+    with pytest.raises(ValidationError):
+        GraphNode(
+            id="node-1",
+            project_id="project-1",
+            tenant_id="tenant-1",
+            labels=[],
+        )
+
+
+@pytest.mark.parametrize("label", ["", "Bad Label"])
+def test_graph_node_rejects_unsafe_label_items(label: str) -> None:
+    with pytest.raises(ValidationError):
+        GraphNode(
+            id="node-1",
+            project_id="project-1",
+            tenant_id="tenant-1",
+            labels=[label],
+        )
+
+
+@pytest.mark.parametrize(
+    "relationship_type",
+    ["", "DEPENDS_ON) DELETE n //"],
+)
+def test_graph_edge_rejects_unsafe_relationship_types(
+    relationship_type: str,
+) -> None:
+    with pytest.raises(ValidationError):
+        GraphEdge(
+            id="edge-1",
+            project_id="project-1",
+            tenant_id="tenant-1",
+            source_id="node-api",
+            target_id="node-db",
+            relationship_type=relationship_type,
+        )
+
+
+def test_graph_properties_reject_nested_dict_values() -> None:
+    with pytest.raises(ValidationError):
+        GraphNode(
+            id="node-1",
+            project_id="project-1",
+            tenant_id="tenant-1",
+            labels=["ComputeNode"],
+            properties={"metadata": {"nested": "value"}},
+        )
+
+
+def test_appending_unsafe_label_after_construction_is_not_possible() -> None:
+    node = GraphNode(
+        id="node-1",
+        project_id="project-1",
+        tenant_id="tenant-1",
+        labels=["ComputeNode"],
+    )
+
+    with pytest.raises(AttributeError):
+        getattr(node.labels, "append")("Bad Label")
+
+
+def test_changing_relationship_type_after_construction_is_rejected() -> None:
+    edge = GraphEdge(
+        id="edge-1",
+        project_id="project-1",
+        tenant_id="tenant-1",
+        source_id="node-api",
+        target_id="node-db",
+        relationship_type="DEPENDS_ON",
+    )
+
+    with pytest.raises(ValidationError):
+        edge.relationship_type = "DEPENDS_ON_DELETE"
+
+
+def test_mutating_properties_after_construction_is_rejected() -> None:
+    node = GraphNode(
+        id="node-1",
+        project_id="project-1",
+        tenant_id="tenant-1",
+        labels=["ComputeNode"],
+        properties={"ports": [80, 443]},
+    )
+
+    with pytest.raises(TypeError):
+        node.properties["name"] = "claims-api-01"
+
+    with pytest.raises(AttributeError):
+        getattr(node.properties["ports"], "append")(8443)
+
+
+def test_immutable_defaults_are_independent_between_instances() -> None:
+    first_node = GraphNode(
+        id="node-1",
+        project_id="project-1",
+        tenant_id="tenant-1",
+        labels=["ComputeNode"],
+    )
+    second_node = GraphNode(
+        id="node-2",
+        project_id="project-1",
+        tenant_id="tenant-1",
+        labels=["ComputeNode"],
+    )
+    first_edge = GraphEdge(
+        id="edge-1",
+        project_id="project-1",
+        tenant_id="tenant-1",
+        source_id="node-api",
+        target_id="node-db",
+        relationship_type="DEPENDS_ON",
+    )
+    second_edge = GraphEdge(
+        id="edge-2",
+        project_id="project-1",
+        tenant_id="tenant-1",
+        source_id="node-api",
+        target_id="node-cache",
+        relationship_type="DEPENDS_ON",
+    )
+
+    assert first_node.properties is not second_node.properties
+    assert first_edge.properties is not second_edge.properties
+    assert first_node.properties == {}
+    assert second_node.properties == {}
+    assert first_edge.properties == {}
+    assert second_edge.properties == {}
+    assert first_edge.evidence == ()
+    assert second_edge.evidence == ()

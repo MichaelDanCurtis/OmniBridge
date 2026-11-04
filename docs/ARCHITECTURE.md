@@ -343,6 +343,33 @@ Required capabilities:
 - reproduce approved blueprints from the graph version that generated them
 - explain why a change order was triggered
 
+### Repository Contract
+
+The canonical graph package owns the Neo4j persistence contract.
+
+Current repository responsibilities:
+
+- bootstrap Neo4j constraints and project-scoped indexes
+- upsert canonical graph nodes
+- upsert canonical graph relationships after nodes exist
+- ingest a complete mapped graph as nodes first, relationships second
+- return project topology summaries for agent tools and consultant surfaces
+
+The API import path can run in two modes:
+
+- import and count a fixture without persistence
+- import, bootstrap schema, and persist the graph into Neo4j when `persist_to_neo4j` is requested
+
+Local Neo4j configuration uses:
+
+```text
+OMNIBRIDGE_NEO4J_URI
+OMNIBRIDGE_NEO4J_USER
+OMNIBRIDGE_NEO4J_PASSWORD
+```
+
+This gives corridor discovery a deterministic path into the canonical graph before GraphRAG and production agents query it.
+
 ## 6. GraphRAG Architecture
 
 GraphRAG is a core agent capability, not a side feature.
@@ -368,6 +395,15 @@ User or workflow question
    -> agent produces answer/recommendation
    -> answer cites graph evidence and assumptions
 ```
+
+Current agent graph tooling starts with a bounded topology context tool. The tool receives `project_id`, `tenant_id`, and an edge limit, calls the canonical graph repository, and returns:
+
+- a short topology summary
+- node counts by label
+- relationship counts by type
+- evidence edge strings suitable for agent context
+
+This is intentionally narrower than arbitrary Cypher. It gives LangGraph workflows graph awareness while preserving the rule that agents reason over typed tools.
 
 Agent responses should distinguish:
 
@@ -804,4 +840,3 @@ Definition of done:
 - [LangFlow agents](https://docs.langflow.org/agents)
 - [Langfuse documentation](https://langfuse.com/docs/)
 - [Azure Migrate REST API](https://learn.microsoft.com/en-us/rest/api/migrate/)
-

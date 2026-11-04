@@ -80,7 +80,7 @@ packages/
 corridors/
   vmware-to-azure/
     fixtures/
-      acme-small-estate.json
+      release1-small-estate.json
     mappings/
       vmware_to_canonical.v1.yaml
     rules/
@@ -739,19 +739,19 @@ git commit -m "feat: add Neo4j graph repository"
 ### Task 5: VMware Fixture and Canonical Mapping
 
 **Files:**
-- Create: `/Volumes/Main External/Development/OmniBridge/corridors/vmware-to-azure/fixtures/acme-small-estate.json`
+- Create: `/Volumes/Main External/Development/OmniBridge/corridors/vmware-to-azure/fixtures/release1-small-estate.json`
 - Create: `/Volumes/Main External/Development/OmniBridge/corridors/vmware-to-azure/src/omnibridge_vmware_to_azure/fixture_loader.py`
 - Create: `/Volumes/Main External/Development/OmniBridge/corridors/vmware-to-azure/src/omnibridge_vmware_to_azure/mapper.py`
 - Create: `/Volumes/Main External/Development/OmniBridge/corridors/vmware-to-azure/tests/test_mapper.py`
 
 - [ ] **Step 1: Add a small estate fixture**
 
-Create `corridors/vmware-to-azure/fixtures/acme-small-estate.json`:
+Create `corridors/vmware-to-azure/fixtures/release1-small-estate.json`:
 
 ```json
 {
-  "project_id": "project-acme-vmware-azure",
-  "tenant_id": "tenant-acme",
+  "project_id": "project-release1-vmware-azure",
+  "tenant_id": "tenant-omnibridge-demo",
   "vcenter": "vcsa-prod-01",
   "datacenter": "DC1",
   "clusters": [
@@ -824,7 +824,7 @@ from omnibridge_vmware_to_azure.mapper import map_fixture_to_graph
 
 
 def test_fixture_maps_vms_to_compute_nodes() -> None:
-    fixture = load_fixture(Path("corridors/vmware-to-azure/fixtures/acme-small-estate.json"))
+    fixture = load_fixture(Path("corridors/vmware-to-azure/fixtures/release1-small-estate.json"))
 
     graph = map_fixture_to_graph(fixture)
 
@@ -837,7 +837,7 @@ def test_fixture_maps_vms_to_compute_nodes() -> None:
 
 
 def test_fixture_maps_vm_network_relationships() -> None:
-    fixture = load_fixture(Path("corridors/vmware-to-azure/fixtures/acme-small-estate.json"))
+    fixture = load_fixture(Path("corridors/vmware-to-azure/fixtures/release1-small-estate.json"))
 
     graph = map_fixture_to_graph(fixture)
 
@@ -971,7 +971,7 @@ def test_import_fixture_route_returns_counts() -> None:
 
     response = client.post(
         "/imports/vmware-fixture",
-        json={"fixture_path": "corridors/vmware-to-azure/fixtures/acme-small-estate.json"},
+        json={"fixture_path": "corridors/vmware-to-azure/fixtures/release1-small-estate.json"},
     )
 
     assert response.status_code == 200
@@ -1322,7 +1322,7 @@ from omnibridge_blueprint_engine.generator import generate_vmware_to_azure_bluep
 
 def test_blueprint_contains_corridor_and_approval_gates() -> None:
     blueprint = generate_vmware_to_azure_blueprint(
-        project_id="project-acme-vmware-azure",
+        project_id="project-release1-vmware-azure",
         application_name="Claims Portal",
         compute_node_names=["claims-web-01", "claims-api-01", "claims-db-01"],
     )
@@ -1446,12 +1446,12 @@ def test_build_trace_metadata_contains_project_and_agent() -> None:
     )
 
     metadata = build_trace_metadata(
-        project_id="project-acme-vmware-azure",
+        project_id="project-release1-vmware-azure",
         agent_name="release1-analysis-agent",
         result=result,
     )
 
-    assert metadata["project_id"] == "project-acme-vmware-azure"
+    assert metadata["project_id"] == "project-release1-vmware-azure"
     assert metadata["agent_name"] == "release1-analysis-agent"
     assert metadata["requires_consultant_review"] is True
 ```
@@ -1654,7 +1654,7 @@ router = APIRouter(prefix="/blueprints", tags=["blueprints"])
 @router.get("/release1-demo")
 def get_release1_blueprint() -> dict[str, object]:
     return generate_vmware_to_azure_blueprint(
-        project_id="project-acme-vmware-azure",
+        project_id="project-release1-vmware-azure",
         application_name="Claims Portal",
         compute_node_names=["claims-web-01", "claims-api-01", "claims-db-01"],
     ).model_dump()
@@ -1762,7 +1762,7 @@ Create `src/App.tsx`:
 
 ```tsx
 const summary = {
-  project: "ACME VMware-to-Azure Assessment",
+  project: "OmniBridge VMware-to-Azure Assessment",
   application: "Claims Portal",
   computeNodes: 3,
   blockers: 1,
@@ -1961,13 +1961,13 @@ from omnibridge_blueprint_engine.artifacts import render_assessment_markdown
 
 def test_render_assessment_markdown_contains_project_and_decisions() -> None:
     markdown = render_assessment_markdown(
-        project_name="ACME VMware-to-Azure Assessment",
+        project_name="OmniBridge VMware-to-Azure Assessment",
         application_name="Claims Portal",
         blockers=1,
         estimate_usd=27250,
     )
 
-    assert "# ACME VMware-to-Azure Assessment" in markdown
+    assert "# OmniBridge VMware-to-Azure Assessment" in markdown
     assert "Claims Portal" in markdown
     assert "1 blocker" in markdown
     assert "$27,250" in markdown
@@ -2020,7 +2020,7 @@ router = APIRouter(prefix="/artifacts", tags=["artifacts"])
 @router.get("/release1-assessment.md")
 def get_release1_assessment() -> Response:
     markdown = render_assessment_markdown(
-        project_name="ACME VMware-to-Azure Assessment",
+        project_name="OmniBridge VMware-to-Azure Assessment",
         application_name="Claims Portal",
         blockers=1,
         estimate_usd=27250,

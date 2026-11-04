@@ -32,3 +32,76 @@ Future platform code should keep these boundaries:
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/CORRIDOR_CONTRACT.md](docs/CORRIDOR_CONTRACT.md)
 - [corridors/vmware-to-azure/README.md](corridors/vmware-to-azure/README.md)
+
+## Local Development
+
+Prerequisites:
+
+- Docker with Docker Compose
+- `uv`
+- `pnpm`
+
+Create a local environment file:
+
+```bash
+cp .env.example .env
+```
+
+Start infrastructure services:
+
+```bash
+make stack-up
+```
+
+Run Python tests:
+
+```bash
+make test-python
+```
+
+Run web tests:
+
+```bash
+make test-web
+```
+
+Run the Release 1 demo locally:
+
+```bash
+make dev-api
+make dev-web
+```
+
+The web app is served at `http://127.0.0.1:5174/`.
+
+The OmniBridge API defaults to `http://127.0.0.1:8001/` for local demo work so it does not collide with other FastAPI services that often occupy port `8000`.
+
+Useful demo endpoints:
+
+- `GET /workspace/release1-demo`
+- `POST /imports/vmware-fixture`
+- `GET /artifacts/release1-assessment.md`
+- `GET /artifacts/release1-blueprint.yaml`
+- `GET /artifacts/release1-runbook.md`
+
+Import the fixture without persistence:
+
+```bash
+curl -sS http://127.0.0.1:8001/imports/vmware-fixture \
+  -H 'Content-Type: application/json' \
+  -d '{"fixture_path":"corridors/vmware-to-azure/fixtures/release1-small-estate.json"}'
+```
+
+Import the fixture and persist the canonical graph into Neo4j:
+
+```bash
+curl -sS http://127.0.0.1:8001/imports/vmware-fixture \
+  -H 'Content-Type: application/json' \
+  -d '{"fixture_path":"corridors/vmware-to-azure/fixtures/release1-small-estate.json","persist_to_neo4j":true}'
+```
+
+Run the full MVP verification:
+
+```bash
+make verify-release1
+```
